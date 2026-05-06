@@ -1,74 +1,181 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { signOut } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { auth, db } from '../config/firebase';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  Image,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Avatar from '../components/Avatar';
+import BottomNav from '../components/BottomNav';
+import PostCard from '../components/PostCard';
+import { authService } from '../services/AuthService';
+import { postService } from '../services/PostService';
+import { userService } from '../services/UserService';
+import { Post } from '../types';
+
+const isWeb = Platform.OS === 'web';
 
 export default function Home() {
-  const user = auth.currentUser;
+  const user = authService.getCurrentUser();
   const [username, setUsername] = useState('');
-  const [search, setSearch] = useState('');
-  const [searchError, setSearchError] = useState('');
+  const [photoURL, setPhotoURL] = useState('');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'para_ti' | 'siguiendo'>('para_ti');
+  const tabIndicator = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const fetchUser = async () => {
-      if (user) {
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) setUsername(snap.data().username);
-      }
-    };
-    fetchUser();
+    if (user) {
+      userService.getById(user.uid).then(profile => {
+        if (profile) {
+          setUsername(profile.username || '');
+          setPhotoURL(profile.photoURL || '');
+        }
+      });
+    }
+
+    const unsub = postService.subscribeToFeed(newPosts => {
+      setPosts(newPosts);
+      setLoading(false);
+      setRefreshing(false);
+    });
+
+    return unsub;
   }, []);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.replace('/' as any);
+  const switchTab = (tab: 'para_ti' | 'siguiendo') => {
+    setActiveTab(tab);
+    Animated.timing(tabIndicator, {
+      toValue: tab === 'para_ti' ? 0 : 1,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
   };
 
-  const handleSearch = async () => {
-    setSearchError('');
-    if (!search) { setSearchError('Escribe un nombre de usuario'); return; }
-    const q = query(collection(db, 'users'), where('username', '==', search));
-    const snap = await getDocs(q);
-    if (snap.empty) { setSearchError('Usuario no encontrado'); return; }
-    router.push(`/public-profile?username=${search}` as any);
+  const handleEdit = (postId: string) => {
+    router.push(`/edit-post?postId=${postId}` as any);
   };
+
+  const indicatorLeft = tabIndicator.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '50%'],
+  });
+
+  const fallback = username || user?.email || '?';
+  const headerPadding = isWeb ? '8%' : 16;
+  const topPad = isWeb ? 14 : 52;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#111', color: '#fff' }}>
-      <h1 style={{ fontSize: 40, color: '#208c8c', marginBottom: 8 }}>Zyra</h1>
-      <h2 style={{ fontSize: 22, marginBottom: 4 }}>¡Hola, {username || user?.email}!</h2>
-      <p style={{ color: '#aaa', marginBottom: 30 }}>{user?.email}</p>
+    <View style={styles.container}>
 
-      <div style={{ marginBottom: 30, textAlign: 'center' }}>
-        <h3 style={{ marginBottom: 12 }}>Buscar usuario</h3>
-        <input
-          placeholder="Nombre de usuario"
-          value={search}
-          onChange={(e: any) => setSearch(e.target.value)}
-          style={{ width: 220, padding: 10, borderRadius: 6, border: '1px solid #444', backgroundColor: '#222', color: '#fff', fontSize: 16, marginRight: 8 }}
+      {/* Top bar */}
+      <View style={[styles.topBar, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
+        <View style={styles.logoRow}>
+          <Image
+            source={require('../assets/images/LOGO_ZYRA_AZUL.png')}
+            style={styles.logoImg}
+            resizeMode="contain"
+          />
+          <Text style={styles.appName}>ZYRA</Text>
+        </View>
+        <Avatar photoURL={photoURL} fallback={fallback} size={32} />
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity style={styles.tab} onPress={() => switchTab('para_ti')}>
+          <Text style={[styles.tabText, activeTab === 'para_ti' && styles.tabTextActive]}>
+            Para ti
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.tab} onPress={() => switchTab('siguiendo')}>
+          <Text style={[styles.tabText, activeTab === 'siguiendo' && styles.tabTextActive]}>
+            Siguiendo
+          </Text>
+        </TouchableOpacity>
+        <Animated.View style={[styles.tabIndicator, { left: indicatorLeft }]} />
+      </View>
+
+      {/* Feed */}
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color="#208c8c" size="large" />
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <PostCard
+              post={item}
+              currentUserId={user?.uid}
+              onEdit={handleEdit}
+            />
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="newspaper-outline" size={48} color="#333" />
+              <Text style={styles.emptyText}>No hay publicaciones aún</Text>
+              <Text style={styles.emptySubText}>¡Sé el primero en publicar!</Text>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => setRefreshing(true)}
+              tintColor="#208c8c"
+            />
+          }
+          contentContainerStyle={posts.length === 0 && styles.emptyContainer}
         />
-        <button
-          onClick={handleSearch}
-          style={{ padding: '10px 16px', backgroundColor: '#208c8c', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, cursor: 'pointer' }}
-        >
-          Buscar
-        </button>
-        {searchError ? <p style={{ color: 'red', marginTop: 8 }}>{searchError}</p> : null}
-      </div>
+      )}
 
-      <button
-        onClick={() => router.push('/profile' as any)}
-        style={{ width: 280, padding: 12, backgroundColor: '#208c8c', color: '#fff', border: 'none', borderRadius: 6, fontSize: 16, cursor: 'pointer', marginBottom: 12 }}
-      >
-        Ver mi perfil
-      </button>
-      <button
-        onClick={handleLogout}
-        style={{ background: 'none', border: 'none', color: 'red', fontWeight: 'bold', fontSize: 16, cursor: 'pointer' }}
-      >
-        Cerrar sesión
-      </button>
-    </div>
+      <BottomNav active="home" photoURL={photoURL} />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#111' },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e1e1e',
+  },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoImg: { width: 24, height: 24, tintColor: '#208c8c' },
+  appName: { fontSize: 18, fontWeight: '900', color: '#208c8c', letterSpacing: 4 },
+  tabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e1e1e',
+    position: 'relative',
+  },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  tabText: { color: '#555', fontSize: 15, fontWeight: '600' },
+  tabTextActive: { color: '#fff' },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    width: '50%',
+    height: 2,
+    backgroundColor: '#208c8c',
+  },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
+  emptyText: { color: '#555', fontSize: 16, fontWeight: '600' },
+  emptySubText: { color: '#333', fontSize: 13 },
+  emptyContainer: { flexGrow: 1 },
+});

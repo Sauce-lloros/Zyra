@@ -9,6 +9,9 @@ export default function Layout() {
       <Stack.Screen name="home" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="public-profile" />
+      <Stack.Screen name="create-post" />
+      <Stack.Screen name="edit-post" />
+      <Stack.Screen name="search" />
     </Stack>
   );
 }
