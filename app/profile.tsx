@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Avatar from '../components/Avatar';
 import BottomNav from '../components/BottomNav';
+import CommentsModal from '../components/CommentsModal';
 import ImagePickerButton from '../components/ImagePickerButton';
 import PostImagesGrid from '../components/PostImagesGrid';
 import { authService } from '../services/AuthService';
@@ -41,6 +42,7 @@ export default function Profile() {
   const [tempUsername, setTempUsername] = useState('');
   const [tempBio, setTempBio] = useState('');
   const [msg, setMsg] = useState('');
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -152,6 +154,14 @@ export default function Profile() {
     router.replace('/' as any);
   };
 
+  const handleLike = async (postId: string) => {
+    try {
+      await postService.toggleLike(postId);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
   const fallback = username || user?.email || '?';
   const headerPadding = isWeb ? '8%' : 16;
   const topPad = isWeb ? 14 : 52;
@@ -216,37 +226,46 @@ export default function Profile() {
             <View style={styles.divider} />
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.postCard}>
-            <View style={[styles.postInner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
-              <View style={styles.postCardHeader}>
-                <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <TouchableOpacity
-                    onPress={() => router.push(`/edit-post?postId=${item.id}` as any)}
-                  >
-                    <Ionicons name="pencil-outline" size={18} color="#208c8c" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDeletePost(item.id)}>
-                    <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-                  </TouchableOpacity>
+        renderItem={({ item }) => {
+          const userLiked = !!(user && item.likedBy?.includes(user.uid));
+          return (
+            <View style={styles.postCard}>
+              <View style={[styles.postInner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
+                <View style={styles.postCardHeader}>
+                  <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/edit-post?postId=${item.id}` as any)}
+                    >
+                      <Ionicons name="pencil-outline" size={18} color="#208c8c" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeletePost(item.id)}>
+                      <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.postContent}>{item.content}</Text>
-              <PostImagesGrid images={getPostImages(item)} />
-              <View style={styles.postActions}>
-                <View style={styles.actionBtn}>
-                  <Ionicons name="heart-outline" size={18} color="#555" />
-                  <Text style={styles.actionCount}>{item.likes || 0}</Text>
-                </View>
-                <View style={styles.actionBtn}>
-                  <Ionicons name="chatbubble-outline" size={18} color="#555" />
-                  <Text style={styles.actionCount}>{item.comments || 0}</Text>
+                <Text style={styles.postContent}>{item.content}</Text>
+                <PostImagesGrid images={getPostImages(item)} />
+                <View style={styles.postActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item.id)} activeOpacity={0.6}>
+                    <Ionicons
+                      name={userLiked ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={userLiked ? '#ff3b5c' : '#555'}
+                    />
+                    <Text style={[styles.actionCount, userLiked && { color: '#ff3b5c' }]}>
+                      {item.likes || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => setCommentsPostId(item.id)} activeOpacity={0.6}>
+                    <Ionicons name="chatbubble-outline" size={18} color="#555" />
+                    <Text style={styles.actionCount}>{item.comments || 0}</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           !loadingPosts ? (
             <View style={styles.empty}>
@@ -260,6 +279,13 @@ export default function Profile() {
           )
         }
         ItemSeparatorComponent={() => <View style={styles.divider} />}
+      />
+
+      {/* Modal de comentarios */}
+      <CommentsModal
+        visible={!!commentsPostId}
+        postId={commentsPostId || ''}
+        onClose={() => setCommentsPostId(null)}
       />
 
       <Modal visible={editModal} transparent animationType="slide">

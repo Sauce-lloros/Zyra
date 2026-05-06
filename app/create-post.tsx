@@ -19,7 +19,7 @@ import ImagePickerButton from '../components/ImagePickerButton';
 import { authService } from '../services/AuthService';
 import { ImageFolders, imageService } from '../services/ImageService';
 import { postService } from '../services/PostService';
-import { POST_CONTENT_MAX_LENGTH, validatePostContent } from '../validators/postValidators';
+import { POST_CONTENT_MAX_LENGTH } from '../validators/postValidators';
 
 const MAX_IMAGES = 4;
 
@@ -50,10 +50,13 @@ export default function CreatePost() {
     setImageUris(prev => prev.filter((_, i) => i !== index));
   };
 
+  const hasText = content.trim().length > 0;
+  const hasImages = imageUris.length > 0;
+  const canPublish = (hasText || hasImages) && !loading;
+
   const handlePublish = async () => {
-    const check = validatePostContent(content);
-    if (!check.valid) {
-      Alert.alert('Aviso', check.error!);
+    if (!hasText && !hasImages) {
+      Alert.alert('Aviso', 'La publicación debe tener texto o imágenes');
       return;
     }
 
@@ -83,9 +86,9 @@ export default function CreatePost() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Nueva publicación</Text>
           <TouchableOpacity
-            style={[styles.publishBtn, (!content.trim() || loading) && styles.publishBtnDisabled]}
+            style={[styles.publishBtn, !canPublish && styles.publishBtnDisabled]}
             onPress={handlePublish}
-            disabled={!content.trim() || loading}
+            disabled={!canPublish}
           >
             {loading
               ? <ActivityIndicator color="#fff" size="small" />

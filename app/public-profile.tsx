@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   StyleSheet,
@@ -12,7 +13,9 @@ import {
 } from 'react-native';
 import Avatar from '../components/Avatar';
 import BottomNav from '../components/BottomNav';
+import CommentsModal from '../components/CommentsModal';
 import PostImagesGrid from '../components/PostImagesGrid';
+import { authService } from '../services/AuthService';
 import { postService } from '../services/PostService';
 import { userService } from '../services/UserService';
 import { Post, User } from '../types';
@@ -23,10 +26,12 @@ const isWeb = Platform.OS === 'web';
 
 export default function PublicProfile() {
   const { username } = useLocalSearchParams();
+  const currentUser = authService.getCurrentUser();
   const [profile, setProfile] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -51,6 +56,14 @@ export default function PublicProfile() {
 
     return () => { if (unsub) unsub(); };
   }, [username]);
+
+  const handleLike = async (postId: string) => {
+    try {
+      await postService.toggleLike(postId);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   if (loading) {
     return (
@@ -112,25 +125,34 @@ export default function PublicProfile() {
             <View style={styles.divider} />
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.postCard}>
-            <View style={[styles.postInner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
-              <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
-              <Text style={styles.postContent}>{item.content}</Text>
-              <PostImagesGrid images={getPostImages(item)} />
-              <View style={styles.postActions}>
-                <View style={styles.actionBtn}>
-                  <Ionicons name="heart-outline" size={18} color="#555" />
-                  <Text style={styles.actionCount}>{item.likes || 0}</Text>
-                </View>
-                <View style={styles.actionBtn}>
-                  <Ionicons name="chatbubble-outline" size={18} color="#555" />
-                  <Text style={styles.actionCount}>{item.comments || 0}</Text>
+        renderItem={({ item }) => {
+          const userLiked = !!(currentUser && item.likedBy?.includes(currentUser.uid));
+          return (
+            <View style={styles.postCard}>
+              <View style={[styles.postInner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
+                <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
+                <Text style={styles.postContent}>{item.content}</Text>
+                <PostImagesGrid images={getPostImages(item)} />
+                <View style={styles.postActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item.id)} activeOpacity={0.6}>
+                    <Ionicons
+                      name={userLiked ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={userLiked ? '#ff3b5c' : '#555'}
+                    />
+                    <Text style={[styles.actionCount, userLiked && { color: '#ff3b5c' }]}>
+                      {item.likes || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => setCommentsPostId(item.id)} activeOpacity={0.6}>
+                    <Ionicons name="chatbubble-outline" size={18} color="#555" />
+                    <Text style={styles.actionCount}>{item.comments || 0}</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="camera-outline" size={40} color="#333" />
@@ -139,6 +161,14 @@ export default function PublicProfile() {
         }
         ItemSeparatorComponent={() => <View style={styles.divider} />}
       />
+
+      {/* Modal de comentarios */}
+      <CommentsModal
+        visible={!!commentsPostId}
+        postId={commentsPostId || ''}
+        onClose={() => setCommentsPostId(null)}
+      />
+
       <BottomNav active="search" />
     </View>
   );

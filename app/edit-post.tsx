@@ -20,7 +20,7 @@ import { authService } from '../services/AuthService';
 import { ImageFolders, imageService } from '../services/ImageService';
 import { postService } from '../services/PostService';
 import { getPostImages } from '../utils/postImages';
-import { POST_CONTENT_MAX_LENGTH, validatePostContent } from '../validators/postValidators';
+import { POST_CONTENT_MAX_LENGTH } from '../validators/postValidators';
 
 const MAX_IMAGES = 4;
 
@@ -74,10 +74,13 @@ export default function EditPost() {
     setImageUris(prev => prev.filter((_, i) => i !== index));
   };
 
+  const hasText = content.trim().length > 0;
+  const hasImages = imageUris.length > 0;
+  const canSave = (hasText || hasImages) && !loading;
+
   const handleSave = async () => {
-    const check = validatePostContent(content);
-    if (!check.valid) {
-      Alert.alert('Aviso', check.error!);
+    if (!hasText && !hasImages) {
+      Alert.alert('Aviso', 'La publicación debe tener texto o imágenes');
       return;
     }
 
@@ -115,9 +118,9 @@ export default function EditPost() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Editar publicación</Text>
           <TouchableOpacity
-            style={[styles.saveBtn, (!content.trim() || loading) && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
             onPress={handleSave}
-            disabled={!content.trim() || loading}
+            disabled={!canSave}
           >
             {loading
               ? <ActivityIndicator color="#fff" size="small" />
