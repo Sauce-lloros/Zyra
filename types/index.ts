@@ -7,6 +7,8 @@ export interface User {
   bio: string;
   photoURL: string;
   createdAt: Timestamp | Date;
+  followersCount?: number;
+  followingCount?: number;
 }
 
 export interface UserProfileUpdate {
@@ -58,6 +60,13 @@ export interface Comment {
   authorEmail: string;
   createdAt: Timestamp | Date | null;
 }
+
+export interface Follow {
+  uid: string;
+  createdAt: Timestamp | Date | null;
+}
+
+export type FollowState = 'idle' | 'loading' | 'following' | 'not_following';
 
 export interface ValidationResult {
   valid: boolean;
