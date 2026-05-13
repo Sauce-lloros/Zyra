@@ -14,6 +14,7 @@ import {
 import Avatar from '../components/Avatar';
 import BottomNav from '../components/BottomNav';
 import CommentsModal from '../components/CommentsModal';
+import FollowButton from '../components/FollowButton';
 import PostImagesGrid from '../components/PostImagesGrid';
 import { authService } from '../services/AuthService';
 import { postService } from '../services/PostService';
@@ -97,12 +98,14 @@ export default function PublicProfile() {
         keyExtractor={item => item.id}
         ListHeaderComponent={
           <View>
-            {/* Top bar */}
             <View style={[styles.topBar, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backIconBtn}>
+                <Ionicons name="chevron-back" size={24} color="#208c8c" />
+              </TouchableOpacity>
               <Text style={styles.topTitle}>Perfil</Text>
+              <View style={{ width: 32 }} />
             </View>
 
-            {/* Perfil */}
             <View style={styles.profileSection}>
               <Avatar
                 photoURL={profile?.photoURL}
@@ -115,9 +118,18 @@ export default function PublicProfile() {
               ) : (
                 <Text style={styles.emptyBio}>Sin biografía</Text>
               )}
+
+              {profile && (
+                <View style={styles.followBtnContainer}>
+                  <FollowButton
+                    targetUid={profile.uid}
+                    targetUsername={profile.username}
+                    size="medium"
+                  />
+                </View>
+              )}
             </View>
 
-            {/* Header publicaciones */}
             <View style={styles.postsHeader}>
               <Ionicons name="grid-outline" size={18} color="#208c8c" />
               <Text style={styles.postsHeaderText}>Publicaciones</Text>
@@ -162,7 +174,6 @@ export default function PublicProfile() {
         ItemSeparatorComponent={() => <View style={styles.divider} />}
       />
 
-      {/* Modal de comentarios */}
       <CommentsModal
         visible={!!commentsPostId}
         postId={commentsPostId || ''}
@@ -178,14 +189,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111' },
   centered: { flex: 1, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center', gap: 12 },
   topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingBottom: 10,
   },
+  backIconBtn: { padding: 4 },
   topTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
   profileSection: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 24, gap: 12 },
   username: { fontSize: 20, fontWeight: '800', color: '#fff' },
   bio: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 20 },
   emptyBio: { fontSize: 13, color: '#444', fontStyle: 'italic' },
+  followBtnContainer: { marginTop: 8 },
   postsHeader: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { authService } from '../services/AuthService';
@@ -42,14 +43,28 @@ export default function PostCard({ post, currentUserId, onEdit }: PostCardProps)
     }
   };
 
+  const handleAuthorPress = () => {
+    if (!author) return;
+    if (isOwner) {
+      router.push('/profile' as any);
+    } else {
+      router.push(`/public-profile?username=${author.username}` as any);
+    }
+  };
+
   const fallback = author?.username || post.authorEmail;
 
   return (
     <View style={styles.card}>
       <View style={[styles.inner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
-        {/* Header: avatar, username, tiempo, botón editar */}
+        {/* Header: avatar, username (clickeable), tiempo, botón editar */}
         <View style={styles.cardHeader}>
-          <View style={styles.authorRow}>
+          <TouchableOpacity
+            style={styles.authorRow}
+            onPress={handleAuthorPress}
+            activeOpacity={0.7}
+            disabled={!author}
+          >
             <Avatar photoURL={author?.photoURL} fallback={fallback} size={40} />
             <View>
               <Text style={styles.username}>
@@ -57,7 +72,7 @@ export default function PostCard({ post, currentUserId, onEdit }: PostCardProps)
               </Text>
               <Text style={styles.time}>{timeAgo(post.createdAt)}</Text>
             </View>
-          </View>
+          </TouchableOpacity>
           {isOwner && onEdit && (
             <TouchableOpacity onPress={() => onEdit(post.id)}>
               <Ionicons name="pencil-outline" size={20} color="#208c8c" />
