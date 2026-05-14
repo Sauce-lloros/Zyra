@@ -12,6 +12,7 @@ export default function Layout() {
       <Stack.Screen name="create-post" />
       <Stack.Screen name="edit-post" />
       <Stack.Screen name="search" />
+      <Stack.Screen name="connections" />
     </Stack>
   );
 }
