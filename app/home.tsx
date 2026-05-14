@@ -6,6 +6,7 @@ import {
   Animated,
   FlatList,
   Image,
+  Modal,
   Platform,
   RefreshControl,
   StyleSheet,
@@ -16,21 +17,30 @@ import {
 import Avatar from '../components/Avatar';
 import BottomNav from '../components/BottomNav';
 import PostCard from '../components/PostCard';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 import { authService } from '../services/AuthService';
-import { postService } from '../services/PostService';
+import { followService } from '../services/FollowService';
+import { FeedOrder, postService } from '../services/PostService';
 import { userService } from '../services/UserService';
 import { Post } from '../types';
 
 const isWeb = Platform.OS === 'web';
+type TabType = 'para_ti' | 'siguiendo';
 
 export default function Home() {
+  const { checking } = useAuthGuard();
+
   const user = authService.getCurrentUser();
   const [username, setUsername] = useState('');
   const [photoURL, setPhotoURL] = useState('');
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'para_ti' | 'siguiendo'>('para_ti');
+  const [activeTab, setActiveTab] = useState<TabType>('para_ti');
+  const [order, setOrder] = useState<FeedOrder>('desc');
+  const [orderModal, setOrderModal] = useState(false);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [followingLoaded, setFollowingLoaded] = useState(false);
   const tabIndicator = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -42,17 +52,51 @@ export default function Home() {
         }
       });
     }
+  }, []);
 
-    const unsub = postService.subscribeToFeed(newPosts => {
-      setPosts(newPosts);
-      setLoading(false);
-      setRefreshing(false);
+  useEffect(() => {
+    if (!user) return;
+    console.log('[Home] Suscribiendo a lista de seguidos en tiempo real');
+    const unsub = followService.subscribeToFollowing(user.uid, ids => {
+      console.log('[Home] Lista de seguidos actualizada ->', ids.length, 'usuarios');
+      setFollowingIds(ids);
+      setFollowingLoaded(true);
     });
-
     return unsub;
   }, []);
 
-  const switchTab = (tab: 'para_ti' | 'siguiendo') => {
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+
+    if (activeTab === 'para_ti') {
+      console.log('[Home] Tab activo: Para ti -> feed global | orden:', order);
+      setLoading(true);
+      unsub = postService.subscribeToFeed(newPosts => {
+        setPosts(newPosts);
+        setLoading(false);
+        setRefreshing(false);
+      }, order);
+    } else {
+      if (!followingLoaded) {
+        setLoading(true);
+        return;
+      }
+
+      console.log('[Home] Tab activo: Siguiendo -> feed filtrado | seguidos:', followingIds.length, '| orden:', order);
+      setLoading(true);
+      unsub = postService.subscribeToFollowingFeed(followingIds, newPosts => {
+        setPosts(newPosts);
+        setLoading(false);
+        setRefreshing(false);
+      }, order);
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [activeTab, followingIds, followingLoaded, order]);
+
+  const switchTab = (tab: TabType) => {
     setActiveTab(tab);
     Animated.timing(tabIndicator, {
       toValue: tab === 'para_ti' ? 0 : 1,
@@ -65,6 +109,15 @@ export default function Home() {
     router.push(`/edit-post?postId=${postId}` as any);
   };
 
+  const goToSearch = () => {
+    router.push('/search' as any);
+  };
+
+  const selectOrder = (newOrder: FeedOrder) => {
+    setOrder(newOrder);
+    setOrderModal(false);
+  };
+
   const indicatorLeft = tabIndicator.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '50%'],
@@ -73,6 +126,10 @@ export default function Home() {
   const fallback = username || user?.email || '?';
   const headerPadding = isWeb ? '8%' : 16;
   const topPad = isWeb ? 14 : 52;
+
+  const noFollowingYet = activeTab === 'siguiendo' && followingLoaded && followingIds.length === 0;
+
+  if (checking) return null;
 
   return (
     <View style={styles.container}>
@@ -105,8 +162,35 @@ export default function Home() {
         <Animated.View style={[styles.tabIndicator, { left: indicatorLeft }]} />
       </View>
 
+      {/* Icono de orden a la derecha (estilo perfiles) */}
+      {!noFollowingYet && (
+        <View style={[styles.orderBar, { paddingHorizontal: headerPadding as any }]}>
+          <TouchableOpacity
+            style={styles.orderIconBtn}
+            onPress={() => setOrderModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="swap-vertical" size={18} color="#208c8c" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Feed */}
-      {loading ? (
+      {noFollowingYet ? (
+        <View style={styles.emptyContainer}>
+          <View style={styles.empty}>
+            <Ionicons name="people-outline" size={56} color="#333" />
+            <Text style={styles.emptyTitle}>Aún no sigues a nadie</Text>
+            <Text style={styles.emptyText}>
+              Sigue a otros usuarios para ver sus publicaciones aquí
+            </Text>
+            <TouchableOpacity style={styles.findUsersBtn} onPress={goToSearch} activeOpacity={0.85}>
+              <Ionicons name="search" size={18} color="#fff" />
+              <Text style={styles.findUsersBtnText}>Buscar usuarios</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color="#208c8c" size="large" />
         </View>
@@ -124,8 +208,14 @@ export default function Home() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="newspaper-outline" size={48} color="#333" />
-              <Text style={styles.emptyText}>No hay publicaciones aún</Text>
-              <Text style={styles.emptySubText}>¡Sé el primero en publicar!</Text>
+              <Text style={styles.emptyText}>
+                {activeTab === 'siguiendo'
+                  ? 'Las personas que sigues aún no han publicado'
+                  : 'No hay publicaciones aún'}
+              </Text>
+              {activeTab === 'para_ti' && (
+                <Text style={styles.emptySubText}>¡Sé el primero en publicar!</Text>
+              )}
             </View>
           }
           refreshControl={
@@ -138,6 +228,52 @@ export default function Home() {
           contentContainerStyle={posts.length === 0 && styles.emptyContainer}
         />
       )}
+
+      {/* Modal de seleccion de orden */}
+      <Modal
+        visible={orderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOrderModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setOrderModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Ordenar por</Text>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'desc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('desc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-down" size={20} color={order === 'desc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'desc' && styles.orderOptionTextActive]}>
+                Más recientes
+              </Text>
+              {order === 'desc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'asc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('asc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-up" size={20} color={order === 'asc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'asc' && styles.orderOptionTextActive]}>
+                Más antiguos
+              </Text>
+              {order === 'asc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <BottomNav active="home" photoURL={photoURL} />
     </View>
@@ -173,9 +309,75 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#208c8c',
   },
+  orderBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+  },
+  orderIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  empty: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyText: { color: '#555', fontSize: 16, fontWeight: '600' },
-  emptySubText: { color: '#333', fontSize: 13 },
-  emptyContainer: { flexGrow: 1 },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 12, paddingHorizontal: 32 },
+  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 4 },
+  emptyText: { color: '#888', fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptySubText: { color: '#444', fontSize: 13 },
+  emptyContainer: { flexGrow: 1, justifyContent: 'center' },
+  findUsersBtn: {
+    flexDirection: 'row',
+    backgroundColor: '#208c8c',
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 22,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  findUsersBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  orderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#222',
+    marginBottom: 8,
+  },
+  orderOptionActive: {
+    backgroundColor: 'rgba(32,140,140,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(32,140,140,0.4)',
+  },
+  orderOptionText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  orderOptionTextActive: { color: '#fff' },
 });

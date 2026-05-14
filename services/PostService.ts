@@ -18,6 +18,8 @@ import {
 import { auth, db } from '../config/firebase';
 import { Comment, CreatePostData, Post, UpdatePostData } from '../types';
 
+export type FeedOrder = 'desc' | 'asc';
+
 class PostService {
   private static instance: PostService;
 
@@ -100,9 +102,12 @@ class PostService {
     console.log('[PostService] Post eliminado de Firestore -> postId:', postId);
   }
 
-  public subscribeToFeed(callback: (posts: Post[]) => void): Unsubscribe {
-    console.log('[PostService] Consultando feed -> coleccion: posts | orden: createdAt DESC');
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+  public subscribeToFeed(
+    callback: (posts: Post[]) => void,
+    order: FeedOrder = 'desc'
+  ): Unsubscribe {
+    console.log('[PostService] Consultando feed -> orden: createdAt', order.toUpperCase());
+    const q = query(collection(db, 'posts'), orderBy('createdAt', order));
     return onSnapshot(q, snap => {
       const posts = snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
       console.log('[PostService] Recibidos', posts.length, 'posts en el feed');
@@ -110,15 +115,65 @@ class PostService {
     });
   }
 
+  public subscribeToFollowingFeed(
+    followingIds: string[],
+    callback: (posts: Post[]) => void,
+    order: FeedOrder = 'desc'
+  ): Unsubscribe {
+    console.log('[PostService] Consultando feed Siguiendo -> total seguidos:', followingIds.length, '| orden:', order.toUpperCase());
+
+    if (followingIds.length === 0) {
+      console.log('[PostService] No sigue a nadie, retornando feed vacio');
+      callback([]);
+      return () => {};
+    }
+
+    const CHUNK_SIZE = 30;
+    const chunks: string[][] = [];
+    for (let i = 0; i < followingIds.length; i += CHUNK_SIZE) {
+      chunks.push(followingIds.slice(i, i + CHUNK_SIZE));
+    }
+    console.log('[PostService] Feed Siguiendo dividido en', chunks.length, 'consulta(s)');
+
+    const postsByChunk: Post[][] = chunks.map(() => []);
+    const unsubs: Unsubscribe[] = [];
+
+    chunks.forEach((chunk, index) => {
+      const q = query(
+        collection(db, 'posts'),
+        where('authorId', 'in', chunk),
+        orderBy('createdAt', order)
+      );
+      const unsub = onSnapshot(q, snap => {
+        postsByChunk[index] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
+
+        const all = postsByChunk.flat().sort((a, b) => {
+          const aTime = (a.createdAt as any)?.toMillis?.() || 0;
+          const bTime = (b.createdAt as any)?.toMillis?.() || 0;
+          return order === 'desc' ? bTime - aTime : aTime - bTime;
+        });
+        console.log('[PostService] Feed Siguiendo actualizado ->', all.length, 'posts totales');
+        callback(all);
+      });
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      console.log('[PostService] Cancelando suscripciones del feed Siguiendo');
+      unsubs.forEach(u => u());
+    };
+  }
+
   public subscribeToUserPosts(
     userId: string,
-    callback: (posts: Post[]) => void
+    callback: (posts: Post[]) => void,
+    order: FeedOrder = 'desc'
   ): Unsubscribe {
-    console.log('[PostService] Consultando posts del usuario -> authorId:', userId);
+    console.log('[PostService] Consultando posts del usuario -> authorId:', userId, '| orden:', order.toUpperCase());
     const q = query(
       collection(db, 'posts'),
       where('authorId', '==', userId),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', order)
     );
     return onSnapshot(q, snap => {
       const posts = snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));

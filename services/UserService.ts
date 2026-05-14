@@ -3,7 +3,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
+  Unsubscribe,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -75,6 +77,30 @@ class UserService {
     console.log('[UserService] Actualizando foto de perfil -> uid:', uid, '| URL:', photoURL);
     await this.updateProfile(uid, { photoURL });
     console.log('[UserService] Foto de perfil actualizada -> uid:', uid);
+  }
+
+  public subscribeToUser(uid: string, callback: (user: User | null) => void): Unsubscribe {
+    console.log('[UserService] Suscribiendo a usuario en tiempo real -> uid:', uid);
+    return onSnapshot(doc(db, 'users', uid), snap => {
+      if (!snap.exists()) {
+        console.warn('[UserService] Usuario no encontrado en suscripcion -> uid:', uid);
+        callback(null);
+        return;
+      }
+      const user = { uid: snap.id, ...snap.data() } as User;
+      console.log('[UserService] Usuario actualizado en tiempo real -> username:', user.username);
+      callback(user);
+    });
+  }
+
+  public async getByIds(uids: string[]): Promise<User[]> {
+    if (uids.length === 0) return [];
+    console.log('[UserService] Obteniendo', uids.length, 'usuarios por UIDs');
+    const promises = uids.map(uid => this.getById(uid));
+    const users = await Promise.all(promises);
+    const filtered = users.filter((u): u is User => u !== null);
+    console.log('[UserService] Usuarios obtenidos:', filtered.length, 'de', uids.length);
+    return filtered;
   }
 }
 
