@@ -1,0 +1,394 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Avatar from '../components/Avatar';
+import BottomNav from '../components/BottomNav';
+import CommentsModal from '../components/CommentsModal';
+import FollowButton from '../components/FollowButton';
+import PostImagesGrid from '../components/PostImagesGrid';
+import { useAuthGuard } from '../hooks/useAuthGuard';
+import { authService } from '../services/AuthService';
+import { FeedOrder, postService } from '../services/PostService';
+import { userService } from '../services/UserService';
+import { Post, User } from '../types';
+import { getPostImages } from '../utils/postImages';
+import { formatDate } from '../utils/timeAgo';
+
+const isWeb = Platform.OS === 'web';
+
+export default function PublicProfile() {
+  const { checking } = useAuthGuard();
+
+  const { username } = useLocalSearchParams();
+  const currentUser = authService.getCurrentUser();
+  const [profile, setProfile] = useState<User | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+  const [order, setOrder] = useState<FeedOrder>('desc');
+  const [orderModal, setOrderModal] = useState(false);
+
+  useEffect(() => {
+    let unsubPosts: (() => void) | undefined;
+    let unsubUser: (() => void) | undefined;
+
+    const loadProfile = async () => {
+      const user = await userService.getByUsername(username as string);
+      if (!user) {
+        setError('Usuario no encontrado');
+        setLoading(false);
+        return;
+      }
+
+      setProfile(user);
+
+      unsubUser = userService.subscribeToUser(user.uid, updated => {
+        if (updated) setProfile(updated);
+      });
+
+      unsubPosts = postService.subscribeToUserPosts(user.uid, newPosts => {
+        setPosts(newPosts);
+        setLoading(false);
+      }, order);
+    };
+
+    loadProfile();
+
+    return () => {
+      if (unsubPosts) unsubPosts();
+      if (unsubUser) unsubUser();
+    };
+  }, [username, order]);
+
+  const handleLike = async (postId: string) => {
+    try {
+      await postService.toggleLike(postId);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const goToConnections = (tab: 'followers' | 'following') => {
+    if (!profile) return;
+    router.push(`/connections?uid=${profile.uid}&username=${profile.username}&tab=${tab}` as any);
+  };
+
+  const selectOrder = (newOrder: FeedOrder) => {
+    setOrder(newOrder);
+    setOrderModal(false);
+  };
+
+  if (checking) return null;
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator color="#208c8c" size="large" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Ionicons name="person-outline" size={48} color="#333" />
+        <Text style={styles.errorTitle}>Usuario no encontrado</Text>
+        <Text style={styles.errorSub}>@{username} no existe en Zyra</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const headerPadding = isWeb ? '8%' : 16;
+  const topPad = isWeb ? 14 : 52;
+  const postsCount = posts.length;
+  const followersCount = profile?.followersCount || 0;
+  const followingCount = profile?.followingCount || 0;
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        style={{ flex: 1 }}
+        data={posts}
+        keyExtractor={item => item.id}
+        ListHeaderComponent={
+          <View>
+            <View style={[styles.topBar, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backIconBtn}>
+                <Ionicons name="chevron-back" size={24} color="#208c8c" />
+              </TouchableOpacity>
+              <Text style={styles.topTitle}>Perfil</Text>
+              <View style={{ width: 32 }} />
+            </View>
+
+            <View style={styles.profileSection}>
+              <Avatar
+                photoURL={profile?.photoURL}
+                fallback={profile?.username}
+                size={90}
+              />
+              <Text style={styles.username}>@{profile?.username}</Text>
+              {profile?.bio ? (
+                <Text style={styles.bio}>{profile.bio}</Text>
+              ) : (
+                <Text style={styles.emptyBio}>Sin biografía</Text>
+              )}
+
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{postsCount}</Text>
+                  <Text style={styles.statLabel}>Posts</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => goToConnections('followers')}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.statNumber}>{followersCount}</Text>
+                  <Text style={styles.statLabel}>Seguidores</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => goToConnections('following')}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.statNumber}>{followingCount}</Text>
+                  <Text style={styles.statLabel}>Siguiendo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {profile && (
+                <View style={styles.followBtnContainer}>
+                  <FollowButton
+                    targetUid={profile.uid}
+                    targetUsername={profile.username}
+                    size="medium"
+                  />
+                </View>
+              )}
+            </View>
+
+            {/* Header publicaciones con icono de ordenar a la derecha */}
+            <View style={styles.postsHeader}>
+              <View style={styles.postsHeaderLeft}>
+                <Ionicons name="grid-outline" size={18} color="#208c8c" />
+                <Text style={styles.postsHeaderText}>Publicaciones</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.orderIconBtn}
+                onPress={() => setOrderModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="swap-vertical" size={18} color="#208c8c" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.divider} />
+          </View>
+        }
+        renderItem={({ item }) => {
+          const userLiked = !!(currentUser && item.likedBy?.includes(currentUser.uid));
+          return (
+            <View style={styles.postCard}>
+              <View style={[styles.postInner, isWeb && { maxWidth: 800, alignSelf: 'center', width: '100%' }]}>
+                <Text style={styles.postTime}>{formatDate(item.createdAt)}</Text>
+                <Text style={styles.postContent}>{item.content}</Text>
+                <PostImagesGrid images={getPostImages(item)} />
+                <View style={styles.postActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => handleLike(item.id)} activeOpacity={0.6}>
+                    <Ionicons
+                      name={userLiked ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={userLiked ? '#ff3b5c' : '#555'}
+                    />
+                    <Text style={[styles.actionCount, userLiked && { color: '#ff3b5c' }]}>
+                      {item.likes || 0}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => setCommentsPostId(item.id)} activeOpacity={0.6}>
+                    <Ionicons name="chatbubble-outline" size={18} color="#555" />
+                    <Text style={styles.actionCount}>{item.comments || 0}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="camera-outline" size={40} color="#333" />
+            <Text style={styles.emptyText}>Este usuario no ha publicado nada</Text>
+          </View>
+        }
+        ItemSeparatorComponent={() => <View style={styles.divider} />}
+      />
+
+      <CommentsModal
+        visible={!!commentsPostId}
+        postId={commentsPostId || ''}
+        onClose={() => setCommentsPostId(null)}
+      />
+
+      {/* Modal de orden */}
+      <Modal
+        visible={orderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOrderModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.orderModalOverlay}
+          activeOpacity={1}
+          onPress={() => setOrderModal(false)}
+        >
+          <View style={styles.orderModalContent}>
+            <Text style={styles.orderModalTitle}>Ordenar por</Text>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'desc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('desc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-down" size={20} color={order === 'desc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'desc' && styles.orderOptionTextActive]}>
+                Más recientes
+              </Text>
+              {order === 'desc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'asc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('asc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-up" size={20} color={order === 'asc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'asc' && styles.orderOptionTextActive]}>
+                Más antiguos
+              </Text>
+              {order === 'asc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <BottomNav active="search" />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#111' },
+  centered: { flex: 1, backgroundColor: '#111', justifyContent: 'center', alignItems: 'center', gap: 12 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+  },
+  backIconBtn: { padding: 4 },
+  topTitle: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  profileSection: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 24, gap: 10 },
+  username: { fontSize: 20, fontWeight: '800', color: '#fff', marginTop: 6 },
+  bio: { fontSize: 14, color: '#aaa', textAlign: 'center', lineHeight: 20 },
+  emptyBio: { fontSize: 13, color: '#444', fontStyle: 'italic' },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingHorizontal: 8,
+  },
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+  },
+  statNumber: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  statLabel: { color: '#888', fontSize: 13, marginTop: 2 },
+  followBtnContainer: { marginTop: 14 },
+  postsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  postsHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  postsHeaderText: { color: '#208c8c', fontWeight: '700', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
+  orderIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  divider: { height: 1, backgroundColor: '#1e1e1e' },
+  postCard: { paddingHorizontal: 16, paddingVertical: 14 },
+  postInner: {},
+  postTime: { color: '#555', fontSize: 12, marginBottom: 6 },
+  postContent: { color: '#ddd', fontSize: 15, lineHeight: 22, marginBottom: 10 },
+  postActions: { flexDirection: 'row', gap: 16 },
+  actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  actionCount: { color: '#555', fontSize: 12 },
+  empty: { alignItems: 'center', paddingTop: 40, gap: 10 },
+  emptyText: { color: '#555', fontSize: 14 },
+  errorTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  errorSub: { color: '#666', fontSize: 13 },
+  backBtn: { backgroundColor: '#208c8c', borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12, marginTop: 8 },
+  backBtnText: { color: '#fff', fontWeight: '700' },
+  orderModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  orderModalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  orderModalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  orderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#222',
+    marginBottom: 8,
+  },
+  orderOptionActive: {
+    backgroundColor: 'rgba(32,140,140,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(32,140,140,0.4)',
+  },
+  orderOptionText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  orderOptionTextActive: { color: '#fff' },
+});

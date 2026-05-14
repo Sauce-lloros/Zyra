@@ -1,0 +1,14 @@
+.env
+.env.local
+.env.production
+
+node_modules/
+
+.expo/
+dist/
+web-build/
+
+.DS_Store
+*.log
+
+expo-env.d.ts

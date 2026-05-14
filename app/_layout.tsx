@@ -1,0 +1,18 @@
+import { Stack } from 'expo-router';
+
+export default function Layout() {
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="profile" />
+      <Stack.Screen name="public-profile" />
+      <Stack.Screen name="create-post" />
+      <Stack.Screen name="edit-post" />
+      <Stack.Screen name="search" />
+      <Stack.Screen name="connections" />
+    </Stack>
+  );
+}
