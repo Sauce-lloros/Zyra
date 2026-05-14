@@ -18,11 +18,12 @@ import BottomNav from '../components/BottomNav';
 import CommentsModal from '../components/CommentsModal';
 import ImagePickerButton from '../components/ImagePickerButton';
 import PostImagesGrid from '../components/PostImagesGrid';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 import { authService } from '../services/AuthService';
 import { ImageFolders, imageService } from '../services/ImageService';
-import { postService } from '../services/PostService';
+import { FeedOrder, postService } from '../services/PostService';
 import { userService } from '../services/UserService';
-import { Post } from '../types';
+import { Post, User } from '../types';
 import { confirm } from '../utils/confirm';
 import { getPostImages } from '../utils/postImages';
 import { formatDate } from '../utils/timeAgo';
@@ -30,7 +31,10 @@ import { formatDate } from '../utils/timeAgo';
 const isWeb = Platform.OS === 'web';
 
 export default function Profile() {
+  const { checking } = useAuthGuard();
+
   const user = authService.getCurrentUser();
+  const [profile, setProfile] = useState<User | null>(null);
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
   const [photoURL, setPhotoURL] = useState('');
@@ -43,25 +47,34 @@ export default function Profile() {
   const [tempBio, setTempBio] = useState('');
   const [msg, setMsg] = useState('');
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+  const [order, setOrder] = useState<FeedOrder>('desc');
+  const [orderModal, setOrderModal] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
-    userService.getById(user.uid).then(profile => {
-      if (profile) {
-        setUsername(profile.username || '');
-        setBio(profile.bio || '');
-        setPhotoURL(profile.photoURL || '');
+    const unsubUser = userService.subscribeToUser(user.uid, updated => {
+      if (updated) {
+        setProfile(updated);
+        setUsername(updated.username || '');
+        setBio(updated.bio || '');
+        setPhotoURL(updated.photoURL || '');
       }
     });
 
-    const unsub = postService.subscribeToUserPosts(user.uid, newPosts => {
+    return () => {
+      unsubUser();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsubPosts = postService.subscribeToUserPosts(user.uid, newPosts => {
       setPosts(newPosts);
       setLoadingPosts(false);
-    });
-
-    return unsub;
-  }, []);
+    }, order);
+    return unsubPosts;
+  }, [order]);
 
   const handlePhotoPicked = async (image: any) => {
     if (!user) return;
@@ -162,9 +175,24 @@ export default function Profile() {
     }
   };
 
+  const goToConnections = (tab: 'followers' | 'following') => {
+    if (!user || !username) return;
+    router.push(`/connections?uid=${user.uid}&username=${username}&tab=${tab}` as any);
+  };
+
+  const selectOrder = (newOrder: FeedOrder) => {
+    setOrder(newOrder);
+    setOrderModal(false);
+  };
+
   const fallback = username || user?.email || '?';
   const headerPadding = isWeb ? '8%' : 16;
   const topPad = isWeb ? 14 : 52;
+  const postsCount = posts.length;
+  const followersCount = profile?.followersCount || 0;
+  const followingCount = profile?.followingCount || 0;
+
+  if (checking) return null;
 
   return (
     <View style={styles.container}>
@@ -174,7 +202,6 @@ export default function Profile() {
         keyExtractor={item => item.id}
         ListHeaderComponent={
           <View>
-            {/* Top bar */}
             <View style={[styles.topBar, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
               <Text style={styles.topTitle}>Mi Perfil</Text>
               <View style={[styles.topActions, { right: headerPadding as any, top: topPad - 4 }]}>
@@ -187,7 +214,6 @@ export default function Profile() {
               </View>
             </View>
 
-            {/* Avatar + info */}
             <View style={styles.profileSection}>
               <ImagePickerButton
                 onPick={handlePhotoPicked}
@@ -216,12 +242,44 @@ export default function Profile() {
               <Text style={styles.username}>@{username || 'usuario'}</Text>
               {bio ? <Text style={styles.bio}>{bio}</Text> : null}
               <Text style={styles.email}>{user?.email}</Text>
+
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{postsCount}</Text>
+                  <Text style={styles.statLabel}>Posts</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => goToConnections('followers')}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.statNumber}>{followersCount}</Text>
+                  <Text style={styles.statLabel}>Seguidores</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.statItem}
+                  onPress={() => goToConnections('following')}
+                  activeOpacity={0.6}
+                >
+                  <Text style={styles.statNumber}>{followingCount}</Text>
+                  <Text style={styles.statLabel}>Siguiendo</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Header publicaciones */}
+            {/* Header publicaciones con icono de ordenar a la derecha */}
             <View style={styles.postsHeader}>
-              <Ionicons name="grid-outline" size={18} color="#208c8c" />
-              <Text style={styles.postsHeaderText}>Publicaciones</Text>
+              <View style={styles.postsHeaderLeft}>
+                <Ionicons name="grid-outline" size={18} color="#208c8c" />
+                <Text style={styles.postsHeaderText}>Publicaciones</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.orderIconBtn}
+                onPress={() => setOrderModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="swap-vertical" size={18} color="#208c8c" />
+              </TouchableOpacity>
             </View>
             <View style={styles.divider} />
           </View>
@@ -281,13 +339,13 @@ export default function Profile() {
         ItemSeparatorComponent={() => <View style={styles.divider} />}
       />
 
-      {/* Modal de comentarios */}
       <CommentsModal
         visible={!!commentsPostId}
         postId={commentsPostId || ''}
         onClose={() => setCommentsPostId(null)}
       />
 
+      {/* Modal editar perfil */}
       <Modal visible={editModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -334,6 +392,52 @@ export default function Profile() {
         </View>
       </Modal>
 
+      {/* Modal de orden */}
+      <Modal
+        visible={orderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setOrderModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.orderModalOverlay}
+          activeOpacity={1}
+          onPress={() => setOrderModal(false)}
+        >
+          <View style={styles.orderModalContent}>
+            <Text style={styles.orderModalTitle}>Ordenar por</Text>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'desc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('desc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-down" size={20} color={order === 'desc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'desc' && styles.orderOptionTextActive]}>
+                Más recientes
+              </Text>
+              {order === 'desc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.orderOption, order === 'asc' && styles.orderOptionActive]}
+              onPress={() => selectOrder('asc')}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-up" size={20} color={order === 'asc' ? '#208c8c' : '#888'} />
+              <Text style={[styles.orderOptionText, order === 'asc' && styles.orderOptionTextActive]}>
+                Más antiguos
+              </Text>
+              {order === 'asc' && (
+                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <BottomNav active="profile" photoURL={photoURL} />
     </View>
   );
@@ -377,14 +481,34 @@ const styles = StyleSheet.create({
   removePhotoText: { color: '#ff6b6b', fontSize: 11, fontWeight: '600' },
   bio: { fontSize: 14, color: '#aaa', textAlign: 'center', marginTop: 6, lineHeight: 20, paddingHorizontal: 20 },
   email: { fontSize: 12, color: '#555', marginTop: 6 },
+  statsRow: {
+    flexDirection: 'row',
+    marginTop: 16,
+    paddingHorizontal: 8,
+  },
+  statItem: {
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+  },
+  statNumber: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  statLabel: { color: '#888', fontSize: 13, marginTop: 2 },
   postsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+  postsHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   postsHeaderText: { color: '#208c8c', fontWeight: '700', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
+  orderIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
   divider: { height: 1, backgroundColor: '#1e1e1e' },
   postCard: { paddingHorizontal: 16, paddingVertical: 14 },
   postInner: {},
@@ -427,4 +551,44 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   modalSaveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  orderModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  orderModalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 360,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  orderModalTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  orderOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#222',
+    marginBottom: 8,
+  },
+  orderOptionActive: {
+    backgroundColor: 'rgba(32,140,140,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(32,140,140,0.4)',
+  },
+  orderOptionText: { color: '#888', fontSize: 14, fontWeight: '600' },
+  orderOptionTextActive: { color: '#fff' },
 });
