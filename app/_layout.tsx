@@ -13,6 +13,8 @@ export default function Layout() {
       <Stack.Screen name="edit-post" />
       <Stack.Screen name="search" />
       <Stack.Screen name="connections" />
+      <Stack.Screen name="chats" />
+      <Stack.Screen name="chat-room" />
     </Stack>
   );
 }

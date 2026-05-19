@@ -19,6 +19,7 @@ import FollowButton from '../components/FollowButton';
 import PostImagesGrid from '../components/PostImagesGrid';
 import { useAuthGuard } from '../hooks/useAuthGuard';
 import { authService } from '../services/AuthService';
+import { chatService } from '../services/ChatService';
 import { FeedOrder, postService } from '../services/PostService';
 import { userService } from '../services/UserService';
 import { Post, User } from '../types';
@@ -39,6 +40,7 @@ export default function PublicProfile() {
   const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
   const [order, setOrder] = useState<FeedOrder>('desc');
   const [orderModal, setOrderModal] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
 
   useEffect(() => {
     let unsubPosts: (() => void) | undefined;
@@ -85,6 +87,19 @@ export default function PublicProfile() {
     router.push(`/connections?uid=${profile.uid}&username=${profile.username}&tab=${tab}` as any);
   };
 
+  const handleOpenChat = async () => {
+    if (!profile || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const chatId = await chatService.createOrGetChat(profile.uid);
+      router.push(`/chat-room?chatId=${chatId}&otherUid=${profile.uid}&otherUsername=${profile.username}` as any);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'No se pudo abrir el chat');
+    } finally {
+      setOpeningChat(false);
+    }
+  };
+
   const selectOrder = (newOrder: FeedOrder) => {
     setOrder(newOrder);
     setOrderModal(false);
@@ -118,6 +133,7 @@ export default function PublicProfile() {
   const postsCount = posts.length;
   const followersCount = profile?.followersCount || 0;
   const followingCount = profile?.followingCount || 0;
+  const isMyOwnProfile = currentUser?.uid === profile?.uid;
 
   return (
     <View style={styles.container}>
@@ -171,18 +187,32 @@ export default function PublicProfile() {
                 </TouchableOpacity>
               </View>
 
-              {profile && (
-                <View style={styles.followBtnContainer}>
+              {profile && !isMyOwnProfile && (
+                <View style={styles.actionsRow}>
                   <FollowButton
                     targetUid={profile.uid}
                     targetUsername={profile.username}
                     size="medium"
                   />
+                  <TouchableOpacity
+                    style={styles.messageBtn}
+                    onPress={handleOpenChat}
+                    disabled={openingChat}
+                    activeOpacity={0.8}
+                  >
+                    {openingChat ? (
+                      <ActivityIndicator size="small" color="#208c8c" />
+                    ) : (
+                      <>
+                        <Ionicons name="chatbubble-outline" size={18} color="#208c8c" />
+                        <Text style={styles.messageBtnText}>Mensaje</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
 
-            {/* Header publicaciones con icono de ordenar a la derecha */}
             <View style={styles.postsHeader}>
               <View style={styles.postsHeaderLeft}>
                 <Ionicons name="grid-outline" size={18} color="#208c8c" />
@@ -242,7 +272,6 @@ export default function PublicProfile() {
         onClose={() => setCommentsPostId(null)}
       />
 
-      {/* Modal de orden */}
       <Modal
         visible={orderModal}
         transparent
@@ -320,7 +349,31 @@ const styles = StyleSheet.create({
   },
   statNumber: { color: '#fff', fontSize: 18, fontWeight: '800' },
   statLabel: { color: '#888', fontSize: 13, marginTop: 2 },
-  followBtnContainer: { marginTop: 14 },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  messageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#208c8c',
+    paddingHorizontal: 20,
+    paddingVertical: 9,
+    borderRadius: 22,
+    minWidth: 110,
+    gap: 6,
+  },
+  messageBtnText: {
+    color: '#208c8c',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
   postsHeader: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -72,3 +72,29 @@ export interface ValidationResult {
   valid: boolean;
   error?: string;
 }
+
+// ===== HU28: Chat privado =====
+
+export interface Chat {
+  id: string;
+  members: string[];                            // [uid1, uid2]
+  memberNames: { [uid: string]: string };       // { uid1: "fer", uid2: "samuel" }
+  memberPhotos: { [uid: string]: string };      // { uid1: "url1", uid2: "url2" }
+  lastMessage: string;
+  lastMessageAt: Timestamp | Date | null;
+  lastMessageBy: string;                        // uid del que envio el ultimo mensaje
+  unreadCount: { [uid: string]: number };       // { uid1: 0, uid2: 3 }
+}
+
+export interface Message {
+  id: string;
+  chatId: string;
+  text: string;
+  senderId: string;
+  createdAt: Timestamp | Date | null;
+  read: boolean;
+}
+
+export interface SendMessageData {
+  text: string;
+}
