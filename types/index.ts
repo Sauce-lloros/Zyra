@@ -73,17 +73,15 @@ export interface ValidationResult {
   error?: string;
 }
 
-// ===== HU28: Chat privado =====
-
 export interface Chat {
   id: string;
-  members: string[];                            // [uid1, uid2]
-  memberNames: { [uid: string]: string };       // { uid1: "fer", uid2: "samuel" }
-  memberPhotos: { [uid: string]: string };      // { uid1: "url1", uid2: "url2" }
+  members: string[];
+  memberNames: { [uid: string]: string };
+  memberPhotos: { [uid: string]: string };
   lastMessage: string;
   lastMessageAt: Timestamp | Date | null;
-  lastMessageBy: string;                        // uid del que envio el ultimo mensaje
-  unreadCount: { [uid: string]: number };       // { uid1: 0, uid2: 3 }
+  lastMessageBy: string;
+  unreadCount: { [uid: string]: number };
 }
 
 export interface Message {
@@ -97,4 +95,17 @@ export interface Message {
 
 export interface SendMessageData {
   text: string;
+}
+
+export interface Notification {
+  id: string;
+  recipientId: string;
+  senderId: string;
+  senderUsername: string;
+  senderPhotoURL: string;
+  type: 'follow' | 'like' | 'comment';
+  postId?: string | null;
+  postPreview?: string | null;
+  read: boolean;
+  createdAt: Timestamp | Date | null;
 }

@@ -14,6 +14,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { notificationService } from './NotificationService';
+import { userService } from './UserService';
 
 class FollowService {
   private static instance: FollowService;
@@ -46,23 +48,29 @@ class FollowService {
 
     const followerRef = doc(db, 'users', targetUid, 'followers', user.uid);
 
-    await setDoc(followingRef, {
-      createdAt: serverTimestamp(),
-    });
-    console.log('[FollowService] Doc creado -> users/' + user.uid + '/following/' + targetUid);
+    await setDoc(followingRef, { createdAt: serverTimestamp() });
+    await setDoc(followerRef, { createdAt: serverTimestamp() });
 
-    await setDoc(followerRef, {
-      createdAt: serverTimestamp(),
-    });
-    console.log('[FollowService] Doc creado -> users/' + targetUid + '/followers/' + user.uid);
+    await updateDoc(doc(db, 'users', user.uid), { followingCount: increment(1) });
+    await updateDoc(doc(db, 'users', targetUid), { followersCount: increment(1) });
 
-    await updateDoc(doc(db, 'users', user.uid), {
-      followingCount: increment(1),
-    });
-    await updateDoc(doc(db, 'users', targetUid), {
-      followersCount: increment(1),
-    });
     console.log('[FollowService] Contadores actualizados (+1) -> currentUid y targetUid');
+
+    try {
+      const currentProfile = await userService.getById(user.uid);
+      if (currentProfile) {
+        await notificationService.createNotification({
+          recipientId: targetUid,
+          senderId: user.uid,
+          senderUsername: currentProfile.username,
+          senderPhotoURL: currentProfile.photoURL || '',
+          type: 'follow',
+        });
+        console.log('[FollowService] Notificacion de follow creada -> targetUid:', targetUid);
+      }
+    } catch (e) {
+      console.warn('[FollowService] No se pudo crear notificacion de follow:', e);
+    }
   }
 
   public async unfollow(targetUid: string): Promise<void> {
@@ -81,17 +89,11 @@ class FollowService {
     const followerRef = doc(db, 'users', targetUid, 'followers', user.uid);
 
     await deleteDoc(followingRef);
-    console.log('[FollowService] Doc eliminado -> users/' + user.uid + '/following/' + targetUid);
-
     await deleteDoc(followerRef);
-    console.log('[FollowService] Doc eliminado -> users/' + targetUid + '/followers/' + user.uid);
 
-    await updateDoc(doc(db, 'users', user.uid), {
-      followingCount: increment(-1),
-    });
-    await updateDoc(doc(db, 'users', targetUid), {
-      followersCount: increment(-1),
-    });
+    await updateDoc(doc(db, 'users', user.uid), { followingCount: increment(-1) });
+    await updateDoc(doc(db, 'users', targetUid), { followersCount: increment(-1) });
+
     console.log('[FollowService] Contadores actualizados (-1) -> currentUid y targetUid');
   }
 

@@ -4,23 +4,43 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { authService } from '../services/AuthService';
 import { chatService } from '../services/ChatService';
+import { notificationService } from '../services/NotificationService';
 
 interface BottomNavProps {
-  active: 'home' | 'create' | 'search' | 'chats' | 'profile';
+  active: 'home' | 'search' | 'create' | 'chats' | 'notifications' | 'profile';
   photoURL?: string;
 }
 
 export default function BottomNav({ active }: BottomNavProps) {
   const [unreadChats, setUnreadChats] = useState(0);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     const user = authService.getCurrentUser();
     if (!user) return;
-    const unsub = chatService.subscribeToUnreadCount(count => {
+
+    const unsubChats = chatService.subscribeToUnreadCount(count => {
       setUnreadChats(count);
     });
-    return unsub;
+
+    const unsubNotifs = notificationService.subscribeToUnreadCount(count => {
+      setUnreadNotifs(count);
+    });
+
+    return () => {
+      unsubChats();
+      unsubNotifs();
+    };
   }, []);
+
+  const Badge = ({ count }: { count: number }) => {
+    if (count === 0) return null;
+    return (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.bottomNav}>
@@ -63,25 +83,22 @@ export default function BottomNav({ active }: BottomNavProps) {
             size={24}
             color={active === 'chats' ? '#208c8c' : '#555'}
           />
-          {unreadChats > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {unreadChats > 99 ? '99+' : unreadChats}
-              </Text>
-            </View>
-          )}
+          <Badge count={unreadChats} />
         </View>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => router.push('/profile' as any)}
+        onPress={() => router.push('/notifications' as any)}
       >
-        <Ionicons
-          name={active === 'profile' ? 'person' : 'person-outline'}
-          size={24}
-          color={active === 'profile' ? '#208c8c' : '#555'}
-        />
+        <View>
+          <Ionicons
+            name={active === 'notifications' ? 'notifications' : 'notifications-outline'}
+            size={24}
+            color={active === 'notifications' ? '#208c8c' : '#555'}
+          />
+          <Badge count={unreadNotifs} />
+        </View>
       </TouchableOpacity>
     </View>
   );

@@ -15,6 +15,7 @@ export default function Layout() {
       <Stack.Screen name="connections" />
       <Stack.Screen name="chats" />
       <Stack.Screen name="chat-room" />
+      <Stack.Screen name="notifications" />
     </Stack>
   );
 }

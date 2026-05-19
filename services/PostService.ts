@@ -17,6 +17,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { Comment, CreatePostData, Post, UpdatePostData } from '../types';
+import { notificationService } from './NotificationService';
+import { userService } from './UserService';
 
 export type FeedOrder = 'desc' | 'asc';
 
@@ -37,8 +39,6 @@ class PostService {
     if (!user) throw new Error('Debes iniciar sesión');
 
     console.log('[PostService] Creando publicacion -> authorId:', user.uid);
-    console.log('[PostService] Contenido:', data.content.trim().substring(0, 60) + (data.content.length > 60 ? '...' : ''));
-    console.log('[PostService] Imagenes:', data.imageURLs?.length ?? 0);
 
     await addDoc(collection(db, 'posts'), {
       content: data.content.trim(),
@@ -60,7 +60,6 @@ class PostService {
       console.warn('[PostService] Post no encontrado -> id:', postId);
       return null;
     }
-    console.log('[PostService] Post obtenido -> id:', snap.id);
     return { id: snap.id, ...snap.data() } as Post;
   }
 
@@ -68,14 +67,9 @@ class PostService {
     const user = auth.currentUser;
     if (!user) throw new Error('Debes iniciar sesión');
 
-    console.log('[PostService] Actualizando publicacion -> postId:', postId, '| uid:', user.uid);
-
     const post = await this.getById(postId);
     if (!post) throw new Error('Publicación no encontrada');
-    if (post.authorId !== user.uid) {
-      console.warn('[PostService] Permiso denegado: el usuario no es el autor -> uid:', user.uid);
-      throw new Error('No puedes editar esta publicación');
-    }
+    if (post.authorId !== user.uid) throw new Error('No puedes editar esta publicación');
 
     await updateDoc(doc(db, 'posts', postId), {
       content: data.content.trim(),
@@ -89,17 +83,12 @@ class PostService {
     const user = auth.currentUser;
     if (!user) throw new Error('Debes iniciar sesión');
 
-    console.log('[PostService] Eliminando post -> postId:', postId, '| uid:', user.uid);
-
     const post = await this.getById(postId);
     if (!post) throw new Error('Publicación no encontrada');
-    if (post.authorId !== user.uid) {
-      console.warn('[PostService] Permiso denegado: el usuario no es el autor -> uid:', user.uid);
-      throw new Error('No puedes eliminar esta publicación');
-    }
+    if (post.authorId !== user.uid) throw new Error('No puedes eliminar esta publicación');
 
     await deleteDoc(doc(db, 'posts', postId));
-    console.log('[PostService] Post eliminado de Firestore -> postId:', postId);
+    console.log('[PostService] Post eliminado -> postId:', postId);
   }
 
   public subscribeToFeed(
@@ -120,10 +109,9 @@ class PostService {
     callback: (posts: Post[]) => void,
     order: FeedOrder = 'desc'
   ): Unsubscribe {
-    console.log('[PostService] Consultando feed Siguiendo -> total seguidos:', followingIds.length, '| orden:', order.toUpperCase());
+    console.log('[PostService] Consultando feed Siguiendo -> total seguidos:', followingIds.length);
 
     if (followingIds.length === 0) {
-      console.log('[PostService] No sigue a nadie, retornando feed vacio');
       callback([]);
       return () => {};
     }
@@ -133,7 +121,6 @@ class PostService {
     for (let i = 0; i < followingIds.length; i += CHUNK_SIZE) {
       chunks.push(followingIds.slice(i, i + CHUNK_SIZE));
     }
-    console.log('[PostService] Feed Siguiendo dividido en', chunks.length, 'consulta(s)');
 
     const postsByChunk: Post[][] = chunks.map(() => []);
     const unsubs: Unsubscribe[] = [];
@@ -146,22 +133,17 @@ class PostService {
       );
       const unsub = onSnapshot(q, snap => {
         postsByChunk[index] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Post));
-
         const all = postsByChunk.flat().sort((a, b) => {
           const aTime = (a.createdAt as any)?.toMillis?.() || 0;
           const bTime = (b.createdAt as any)?.toMillis?.() || 0;
           return order === 'desc' ? bTime - aTime : aTime - bTime;
         });
-        console.log('[PostService] Feed Siguiendo actualizado ->', all.length, 'posts totales');
         callback(all);
       });
       unsubs.push(unsub);
     });
 
-    return () => {
-      console.log('[PostService] Cancelando suscripciones del feed Siguiendo');
-      unsubs.forEach(u => u());
-    };
+    return () => unsubs.forEach(u => u());
   }
 
   public subscribeToUserPosts(
@@ -169,7 +151,7 @@ class PostService {
     callback: (posts: Post[]) => void,
     order: FeedOrder = 'desc'
   ): Unsubscribe {
-    console.log('[PostService] Consultando posts del usuario -> authorId:', userId, '| orden:', order.toUpperCase());
+    console.log('[PostService] Consultando posts del usuario -> authorId:', userId);
     const q = query(
       collection(db, 'posts'),
       where('authorId', '==', userId),
@@ -186,38 +168,49 @@ class PostService {
     const user = auth.currentUser;
     if (!user) throw new Error('Debes iniciar sesión');
 
-    console.log('[PostService] Toggle like -> postId:', postId, '| uid:', user.uid);
-
     const post = await this.getById(postId);
     if (!post) throw new Error('Publicación no encontrada');
 
     const likedBy = post.likedBy || [];
     const alreadyLiked = likedBy.includes(user.uid);
-    console.log('[PostService] Estado actual:', alreadyLiked ? 'con like -> quitando like' : 'sin like -> agregando like');
 
     await updateDoc(doc(db, 'posts', postId), {
       likedBy: alreadyLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
       likes: increment(alreadyLiked ? -1 : 1),
     });
-    console.log('[PostService] Like actualizado -> postId:', postId, '| likes ahora:', alreadyLiked ? post.likes - 1 : post.likes + 1);
+
+    if (!alreadyLiked && post.authorId !== user.uid) {
+      try {
+        const currentProfile = await userService.getById(user.uid);
+        if (currentProfile) {
+          await notificationService.createNotification({
+            recipientId: post.authorId,
+            senderId: user.uid,
+            senderUsername: currentProfile.username,
+            senderPhotoURL: currentProfile.photoURL || '',
+            type: 'like',
+            postId: postId,
+            postPreview: post.content.substring(0, 50),
+          });
+        }
+      } catch (e) {
+        console.warn('[PostService] No se pudo crear notificacion de like:', e);
+      }
+    }
+
+    console.log('[PostService] Like actualizado -> postId:', postId);
   }
 
   public subscribeToComments(
     postId: string,
     callback: (comments: Comment[]) => void
   ): Unsubscribe {
-    console.log('[PostService] Suscribiendo a comentarios -> postId:', postId);
     const q = query(
       collection(db, 'posts', postId, 'comments'),
       orderBy('createdAt', 'asc')
     );
     return onSnapshot(q, snap => {
-      const comments = snap.docs.map(d => ({
-        id: d.id,
-        postId,
-        ...d.data(),
-      } as Comment));
-      console.log('[PostService] Recibidos', comments.length, 'comentarios -> postId:', postId);
+      const comments = snap.docs.map(d => ({ id: d.id, postId, ...d.data() } as Comment));
       callback(comments);
     });
   }
@@ -229,8 +222,8 @@ class PostService {
     const trimmed = content.trim();
     if (!trimmed) throw new Error('El comentario no puede estar vacío');
 
-    console.log('[PostService] Agregando comentario -> postId:', postId, '| uid:', user.uid);
-    console.log('[PostService] Contenido:', trimmed.substring(0, 60) + (trimmed.length > 60 ? '...' : ''));
+    const post = await this.getById(postId);
+    if (!post) throw new Error('Publicación no encontrada');
 
     await addDoc(collection(db, 'posts', postId, 'comments'), {
       content: trimmed,
@@ -239,36 +232,44 @@ class PostService {
       createdAt: serverTimestamp(),
     });
 
-    console.log('[PostService] Incrementando contador de comentarios -> postId:', postId);
-    await updateDoc(doc(db, 'posts', postId), {
-      comments: increment(1),
-    });
-    console.log('[PostService] Comentario agregado correctamente -> postId:', postId);
+    await updateDoc(doc(db, 'posts', postId), { comments: increment(1) });
+
+    if (post.authorId !== user.uid) {
+      try {
+        const currentProfile = await userService.getById(user.uid);
+        if (currentProfile) {
+          await notificationService.createNotification({
+            recipientId: post.authorId,
+            senderId: user.uid,
+            senderUsername: currentProfile.username,
+            senderPhotoURL: currentProfile.photoURL || '',
+            type: 'comment',
+            postId: postId,
+            postPreview: post.content.substring(0, 50),
+          });
+        }
+      } catch (e) {
+        console.warn('[PostService] No se pudo crear notificacion de comentario:', e);
+      }
+    }
+
+    console.log('[PostService] Comentario agregado -> postId:', postId);
   }
 
   public async deleteComment(postId: string, commentId: string): Promise<void> {
     const user = auth.currentUser;
     if (!user) throw new Error('Debes iniciar sesión');
 
-    console.log('[PostService] Eliminando comentario -> postId:', postId, '| commentId:', commentId, '| uid:', user.uid);
-
     const commentRef = doc(db, 'posts', postId, 'comments', commentId);
     const snap = await getDoc(commentRef);
     if (!snap.exists()) throw new Error('Comentario no encontrado');
 
     const data = snap.data();
-    if (data.authorId !== user.uid) {
-      console.warn('[PostService] Permiso denegado: el usuario no es el autor del comentario -> uid:', user.uid);
-      throw new Error('No puedes eliminar este comentario');
-    }
+    if (data.authorId !== user.uid) throw new Error('No puedes eliminar este comentario');
 
     await deleteDoc(commentRef);
-
-    console.log('[PostService] Decrementando contador de comentarios -> postId:', postId);
-    await updateDoc(doc(db, 'posts', postId), {
-      comments: increment(-1),
-    });
-    console.log('[PostService] Comentario eliminado -> postId:', postId, '| commentId:', commentId);
+    await updateDoc(doc(db, 'posts', postId), { comments: increment(-1) });
+    console.log('[PostService] Comentario eliminado -> postId:', postId);
   }
 }
 
