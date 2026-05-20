@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { authService } from '../services/AuthService';
+import { setRegistering } from '../utils/registrationFlag';
 import {
   sanitizePassword,
   sanitizeUsername,
@@ -33,6 +34,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const shake = () => {
@@ -58,15 +60,48 @@ export default function Register() {
 
     setLoading(true);
     try {
+      setRegistering(true);
       await authService.register({ username, email, password });
-      router.replace('/home' as any);
+      setRegistered(true);
     } catch (e: any) {
+      setRegistering(false);
       setError(e.message);
       shake();
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGoToLogin = () => {
+    setRegistering(false);
+    router.replace('/login' as any);
+  };
+
+  if (registered) {
+    return (
+      <View style={styles.successContainer}>
+        <View style={styles.successCard}>
+          <View style={styles.successIcon}>
+            <Ionicons name="checkmark-circle" size={80} color="#208c8c" />
+          </View>
+          <Text style={styles.successTitle}>¡Cuenta creada!</Text>
+          <Text style={styles.successSub}>
+            Bienvenido a Zyra, @{username}
+          </Text>
+          <Text style={styles.successDesc}>
+            Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.
+          </Text>
+          <TouchableOpacity
+            style={styles.successBtn}
+            onPress={handleGoToLogin}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.successBtnText}>Iniciar sesión</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -167,7 +202,7 @@ export default function Register() {
             activeOpacity={0.85}
           >
             <Text style={styles.primaryBtnText}>
-              {loading ? 'Verificando...' : 'Crear cuenta'}
+              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
             </Text>
           </TouchableOpacity>
 
@@ -262,4 +297,51 @@ const styles = StyleSheet.create({
   linkRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   linkText: { color: '#666', fontSize: 14 },
   link: { color: '#208c8c', fontSize: 14, fontWeight: '700' },
+  successContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  successCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  successIcon: { marginBottom: 20 },
+  successTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#fff',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  successSub: {
+    fontSize: 16,
+    color: '#208c8c',
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  successDesc: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  successBtn: {
+    backgroundColor: '#208c8c',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    width: '100%',
+  },
+  successBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 1 },
 });

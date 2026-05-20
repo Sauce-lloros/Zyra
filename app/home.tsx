@@ -56,9 +56,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) return;
-    console.log('[Home] Suscribiendo a lista de seguidos en tiempo real');
     const unsub = followService.subscribeToFollowing(user.uid, ids => {
-      console.log('[Home] Lista de seguidos actualizada ->', ids.length, 'usuarios');
       setFollowingIds(ids);
       setFollowingLoaded(true);
     });
@@ -69,7 +67,6 @@ export default function Home() {
     let unsub: (() => void) | undefined;
 
     if (activeTab === 'para_ti') {
-      console.log('[Home] Tab activo: Para ti -> feed global | orden:', order);
       setLoading(true);
       unsub = postService.subscribeToFeed(newPosts => {
         setPosts(newPosts);
@@ -81,8 +78,6 @@ export default function Home() {
         setLoading(true);
         return;
       }
-
-      console.log('[Home] Tab activo: Siguiendo -> feed filtrado | seguidos:', followingIds.length, '| orden:', order);
       setLoading(true);
       unsub = postService.subscribeToFollowingFeed(followingIds, newPosts => {
         setPosts(newPosts);
@@ -95,6 +90,11 @@ export default function Home() {
       if (unsub) unsub();
     };
   }, [activeTab, followingIds, followingLoaded, order]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1500);
+  };
 
   const switchTab = (tab: TabType) => {
     setActiveTab(tab);
@@ -126,7 +126,6 @@ export default function Home() {
   const fallback = username || user?.email || '?';
   const headerPadding = isWeb ? '8%' : 16;
   const topPad = isWeb ? 14 : 52;
-
   const noFollowingYet = activeTab === 'siguiendo' && followingLoaded && followingIds.length === 0;
 
   if (checking) return null;
@@ -134,7 +133,6 @@ export default function Home() {
   return (
     <View style={styles.container}>
 
-      {/* Top bar */}
       <View style={[styles.topBar, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
         <View style={styles.logoRow}>
           <Image
@@ -149,43 +147,30 @@ export default function Home() {
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity style={styles.tab} onPress={() => switchTab('para_ti')}>
-          <Text style={[styles.tabText, activeTab === 'para_ti' && styles.tabTextActive]}>
-            Para ti
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'para_ti' && styles.tabTextActive]}>Para ti</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.tab} onPress={() => switchTab('siguiendo')}>
-          <Text style={[styles.tabText, activeTab === 'siguiendo' && styles.tabTextActive]}>
-            Siguiendo
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'siguiendo' && styles.tabTextActive]}>Siguiendo</Text>
         </TouchableOpacity>
         <Animated.View style={[styles.tabIndicator, { left: indicatorLeft }]} />
       </View>
 
-      {/* Icono de orden a la derecha (estilo perfiles) */}
       {!noFollowingYet && (
         <View style={[styles.orderBar, { paddingHorizontal: headerPadding as any }]}>
-          <TouchableOpacity
-            style={styles.orderIconBtn}
-            onPress={() => setOrderModal(true)}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.orderIconBtn} onPress={() => setOrderModal(true)} activeOpacity={0.7}>
             <Ionicons name="swap-vertical" size={18} color="#208c8c" />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Feed */}
       {noFollowingYet ? (
         <View style={styles.emptyContainer}>
           <View style={styles.empty}>
             <Ionicons name="people-outline" size={56} color="#333" />
             <Text style={styles.emptyTitle}>Aún no sigues a nadie</Text>
-            <Text style={styles.emptyText}>
-              Sigue a otros usuarios para ver sus publicaciones aquí
-            </Text>
+            <Text style={styles.emptyText}>Sigue a otros usuarios para ver sus publicaciones aquí</Text>
             <TouchableOpacity style={styles.findUsersBtn} onPress={goToSearch} activeOpacity={0.85}>
               <Ionicons name="search" size={18} color="#fff" />
               <Text style={styles.findUsersBtnText}>Buscar usuarios</Text>
@@ -201,29 +186,21 @@ export default function Home() {
           data={posts}
           keyExtractor={item => item.id}
           renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              currentUserId={user?.uid}
-              onEdit={handleEdit}
-            />
+            <PostCard post={item} currentUserId={user?.uid} onEdit={handleEdit} />
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="newspaper-outline" size={48} color="#333" />
               <Text style={styles.emptyText}>
-                {activeTab === 'siguiendo'
-                  ? 'Las personas que sigues aún no han publicado'
-                  : 'No hay publicaciones aún'}
+                {activeTab === 'siguiendo' ? 'Las personas que sigues aún no han publicado' : 'No hay publicaciones aún'}
               </Text>
-              {activeTab === 'para_ti' && (
-                <Text style={styles.emptySubText}>¡Sé el primero en publicar!</Text>
-              )}
+              {activeTab === 'para_ti' && <Text style={styles.emptySubText}>¡Sé el primero en publicar!</Text>}
             </View>
           }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => setRefreshing(true)}
+              onRefresh={onRefresh}
               tintColor="#208c8c"
             />
           }
@@ -231,47 +208,27 @@ export default function Home() {
         />
       )}
 
-      {/* Modal de seleccion de orden */}
-      <Modal
-        visible={orderModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOrderModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setOrderModal(false)}
-        >
+      <Modal visible={orderModal} transparent animationType="fade" onRequestClose={() => setOrderModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setOrderModal(false)}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Ordenar por</Text>
-
             <TouchableOpacity
               style={[styles.orderOption, order === 'desc' && styles.orderOptionActive]}
               onPress={() => selectOrder('desc')}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-down" size={20} color={order === 'desc' ? '#208c8c' : '#888'} />
-              <Text style={[styles.orderOptionText, order === 'desc' && styles.orderOptionTextActive]}>
-                Más recientes
-              </Text>
-              {order === 'desc' && (
-                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
-              )}
+              <Text style={[styles.orderOptionText, order === 'desc' && styles.orderOptionTextActive]}>Más recientes</Text>
+              {order === 'desc' && <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />}
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.orderOption, order === 'asc' && styles.orderOptionActive]}
               onPress={() => selectOrder('asc')}
               activeOpacity={0.7}
             >
               <Ionicons name="arrow-up" size={20} color={order === 'asc' ? '#208c8c' : '#888'} />
-              <Text style={[styles.orderOptionText, order === 'asc' && styles.orderOptionTextActive]}>
-                Más antiguos
-              </Text>
-              {order === 'asc' && (
-                <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />
-              )}
+              <Text style={[styles.orderOptionText, order === 'asc' && styles.orderOptionTextActive]}>Más antiguos</Text>
+              {order === 'asc' && <Ionicons name="checkmark" size={20} color="#208c8c" style={{ marginLeft: 'auto' }} />}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -358,13 +315,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#222',
   },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
   orderOption: {
     flexDirection: 'row',
     alignItems: 'center',

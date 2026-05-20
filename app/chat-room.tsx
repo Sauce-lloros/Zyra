@@ -46,18 +46,22 @@ export default function ChatRoom() {
     const unsub = chatService.subscribeToMessages(chatId, newMessages => {
       setMessages(newMessages);
       setLoading(false);
-      setTimeout(() => {
-        listRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     });
     return unsub;
   }, [chatId]);
 
   useEffect(() => {
-    if (chatId) {
-      chatService.markAsRead(chatId);
-    }
+    if (chatId) chatService.markAsRead(chatId);
   }, [chatId, messages.length]);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/chats' as any);
+    }
+  };
 
   const goToProfile = () => {
     if (!otherUsername) return;
@@ -73,18 +77,15 @@ export default function ChatRoom() {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={[styles.header, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color="#208c8c" />
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.headerInfo} onPress={goToProfile} activeOpacity={0.7}>
           <Avatar photoURL={otherUser?.photoURL} fallback={otherUsername} size={36} />
           <Text style={styles.headerUsername} numberOfLines={1}>@{otherUsername}</Text>
         </TouchableOpacity>
-
         <View style={{ width: 32 }} />
       </View>
 
@@ -113,6 +114,7 @@ export default function ChatRoom() {
             <MessageBubble
               message={item}
               isMine={item.senderId === currentUser?.uid}
+              chatId={chatId || ''}
             />
           )}
         />

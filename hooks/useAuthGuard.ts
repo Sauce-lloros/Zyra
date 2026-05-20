@@ -14,6 +14,7 @@ export function useAuthGuard() {
     const unsub = onAuthStateChanged(auth, user => {
       if (getIsRegistering()) {
         console.log('[useAuthGuard] En proceso de registro, ignorando cambio de sesion');
+        setChecking(false);
         return;
       }
 
@@ -22,10 +23,10 @@ export function useAuthGuard() {
         setIsAuthenticated(true);
         setChecking(false);
       } else {
-        console.warn('[useAuthGuard] Sin sesion -> redirigiendo a /login');
+        console.warn('[useAuthGuard] Sin sesion -> redirigiendo a /');
         setIsAuthenticated(false);
         setChecking(false);
-        router.replace('/login' as any);
+        router.replace('/' as any);
       }
     });
 

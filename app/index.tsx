@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth } from '../config/firebase';
+import { getIsRegistering } from '../utils/registrationFlag';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,7 +47,17 @@ export default function Welcome() {
     }, 2500);
 
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) router.replace('/home' as any);
+      if (user) {
+        // Delay para asegurar que la bandera esté actualizada
+        setTimeout(() => {
+          if (!getIsRegistering()) {
+            console.log('[index] Sesion activa -> redirigiendo a home');
+            router.replace('/home' as any);
+          } else {
+            console.log('[index] Registro en proceso, ignorando onAuthStateChanged');
+          }
+        }, 200);
+      }
     });
 
     return () => {
@@ -139,10 +150,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textTransform: 'uppercase',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#111',
-  },
+  container: { flex: 1, backgroundColor: '#111' },
   imageContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -184,22 +192,14 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 20,
   },
-  buttons: {
-    width: '100%',
-    gap: 12,
-  },
+  buttons: { width: '100%', gap: 12 },
   primaryBtn: {
     backgroundColor: '#208c8c',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
-  primaryBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 1 },
   secondaryBtn: {
     backgroundColor: '#222',
     borderRadius: 12,
@@ -208,9 +208,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  secondaryBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  secondaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

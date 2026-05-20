@@ -3,12 +3,12 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { chatService } from '../services/ChatService';
 
 interface MessageInputProps {
@@ -18,6 +18,7 @@ interface MessageInputProps {
 export default function MessageInput({ chatId }: MessageInputProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -35,7 +36,7 @@ export default function MessageInput({ chatId }: MessageInputProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       <TextInput
         style={styles.input}
         placeholder="Escribe un mensaje..."
@@ -67,8 +68,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    paddingTop: 8,
     backgroundColor: '#0a0a0a',
     borderTopWidth: 1,
     borderTopColor: '#1e1e1e',

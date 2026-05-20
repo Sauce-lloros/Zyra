@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Avatar from '../components/Avatar';
 import ImagePickerButton from '../components/ImagePickerButton';
+import { useAuthGuard } from '../hooks/useAuthGuard';
 import { authService } from '../services/AuthService';
 import { ImageFolders, imageService } from '../services/ImageService';
 import { postService } from '../services/PostService';
@@ -24,11 +25,20 @@ import { POST_CONTENT_MAX_LENGTH } from '../validators/postValidators';
 const MAX_IMAGES = 4;
 
 export default function CreatePost() {
+  const { checking } = useAuthGuard();
   const user = authService.getCurrentUser();
   const [content, setContent] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/home' as any);
+    }
+  };
 
   const handleImagePicked = async (image: any) => {
     if (imageUris.length >= MAX_IMAGES) {
@@ -59,11 +69,10 @@ export default function CreatePost() {
       Alert.alert('Aviso', 'La publicación debe tener texto o imágenes');
       return;
     }
-
     setLoading(true);
     try {
       await postService.create({ content, imageURLs: imageUris });
-      router.back();
+      handleBack();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'No se pudo publicar');
     } finally {
@@ -73,15 +82,16 @@ export default function CreatePost() {
 
   const canAddMore = imageUris.length < MAX_IMAGES;
 
+  if (checking) return null;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.cancelBtn}>
             <Ionicons name="close" size={24} color="#aaa" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Nueva publicación</Text>
@@ -99,7 +109,6 @@ export default function CreatePost() {
 
         <View style={styles.divider} />
 
-        {/* Editor */}
         <View style={styles.editor}>
           <Avatar fallback={user?.email} size={42} bordered={false} />
           <View style={styles.inputWrapper}>
@@ -129,10 +138,7 @@ export default function CreatePost() {
             {imageUris.map((uri, index) => (
               <View key={index} style={styles.imageWrapper}>
                 <Image source={{ uri }} style={styles.imagePreview} />
-                <TouchableOpacity
-                  style={styles.removeImageBtn}
-                  onPress={() => removeImage(index)}
-                >
+                <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(index)}>
                   <Ionicons name="close-circle" size={24} color="#ff6b6b" />
                 </TouchableOpacity>
               </View>
@@ -152,7 +158,6 @@ export default function CreatePost() {
             </View>
           </ImagePickerButton>
         </View>
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -182,60 +187,17 @@ const styles = StyleSheet.create({
   publishBtnDisabled: { opacity: 0.4 },
   publishBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   divider: { height: 1, backgroundColor: '#222' },
-  editor: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-    minHeight: 160,
-  },
+  editor: { flexDirection: 'row', padding: 16, gap: 12, minHeight: 160 },
   inputWrapper: { flex: 1 },
-  textInput: {
-    color: '#fff',
-    fontSize: 16,
-    lineHeight: 24,
-    minHeight: 120,
-    textAlignVertical: 'top',
-  },
+  textInput: { color: '#fff', fontSize: 16, lineHeight: 24, minHeight: 120, textAlignVertical: 'top' },
   charCount: { color: '#444', fontSize: 12, textAlign: 'right', marginTop: 8 },
-  imagePreviewLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
+  imagePreviewLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
   uploadingText: { color: '#208c8c', fontSize: 14 },
-  imagesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 12,
-  },
-  imageWrapper: {
-    width: '48%',
-    aspectRatio: 1,
-    position: 'relative',
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    backgroundColor: '#1a1a1a',
-  },
-  removeImageBtn: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#111',
-    borderRadius: 12,
-  },
-  toolbar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 24,
-  },
+  imagesContainer: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
+  imageWrapper: { width: '48%', aspectRatio: 1, position: 'relative' },
+  imagePreview: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#1a1a1a' },
+  removeImageBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: '#111', borderRadius: 12 },
+  toolbar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 14, gap: 24 },
   toolBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   toolBtnDisabled: { opacity: 0.5 },
   toolBtnText: { color: '#208c8c', fontSize: 14, fontWeight: '600' },
