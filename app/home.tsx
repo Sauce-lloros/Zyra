@@ -144,7 +144,9 @@ export default function Home() {
           />
           <Text style={styles.appName}>ZYRA</Text>
         </View>
-        <Avatar photoURL={photoURL} fallback={fallback} size={32} />
+        <TouchableOpacity onPress={() => router.push('/profile' as any)} activeOpacity={0.7}>
+          <Avatar photoURL={photoURL} fallback={fallback} size={32} />
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
