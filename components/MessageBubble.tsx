@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { chatService } from '../services/ChatService';
 import { Message } from '../types';
 import { timeAgo } from '../utils/timeAgo';
@@ -11,34 +11,48 @@ interface MessageBubbleProps {
   chatId: string;
 }
 
+const isWeb = Platform.OS === 'web';
+
 export default function MessageBubble({ message, isMine, chatId }: MessageBubbleProps) {
   const [showActions, setShowActions] = useState(false);
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Eliminar mensaje',
-      '¿Eliminar este mensaje?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await chatService.deleteMessage(chatId, message.id);
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'No se pudo eliminar');
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = async () => {
     setShowActions(false);
+
+    if (isWeb) {
+      const confirmed = window.confirm('¿Eliminar este mensaje?');
+      if (!confirmed) return;
+      try {
+        await chatService.deleteMessage(chatId, message.id);
+      } catch (e: any) {
+        window.alert(e.message || 'No se pudo eliminar');
+      }
+    } else {
+      Alert.alert(
+        'Eliminar mensaje',
+        '¿Eliminar este mensaje?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Eliminar',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await chatService.deleteMessage(chatId, message.id);
+              } catch (e: any) {
+                Alert.alert('Error', e.message || 'No se pudo eliminar');
+              }
+            },
+          },
+        ]
+      );
+    }
   };
 
   return (
     <View style={[styles.container, isMine ? styles.containerMine : styles.containerOther]}>
       <TouchableOpacity
+        onPress={() => isMine && isWeb && setShowActions(!showActions)}
         onLongPress={() => isMine && setShowActions(!showActions)}
         activeOpacity={0.8}
       >
@@ -88,10 +102,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#222',
     borderBottomLeftRadius: 4,
   },
-  text: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
+  text: { fontSize: 15, lineHeight: 20 },
   textMine: { color: '#fff' },
   textOther: { color: '#eee' },
   time: {
