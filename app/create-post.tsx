@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,12 +13,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Avatar from '../components/Avatar';
 import ImagePickerButton from '../components/ImagePickerButton';
 import { useAuthGuard } from '../hooks/useAuthGuard';
 import { authService } from '../services/AuthService';
 import { ImageFolders, imageService } from '../services/ImageService';
 import { postService } from '../services/PostService';
+import { userService } from '../services/UserService';
 import { POST_CONTENT_MAX_LENGTH } from '../validators/postValidators';
 
 const MAX_IMAGES = 4;
@@ -27,10 +28,19 @@ const MAX_IMAGES = 4;
 export default function CreatePost() {
   const { checking } = useAuthGuard();
   const user = authService.getCurrentUser();
+  const [photoURL, setPhotoURL] = useState('');
   const [content, setContent] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      userService.getById(user.uid).then(profile => {
+        if (profile) setPhotoURL(profile.photoURL || '');
+      });
+    }
+  }, []);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -110,7 +120,7 @@ export default function CreatePost() {
         <View style={styles.divider} />
 
         <View style={styles.editor}>
-          <Avatar fallback={user?.email} size={42} bordered={false} />
+          <Avatar photoURL={photoURL} fallback={user?.email} size={42} bordered={false} />
           <View style={styles.inputWrapper}>
             <TextInput
               style={styles.textInput}

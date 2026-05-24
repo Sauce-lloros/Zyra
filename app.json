@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ZyraAppFinal",
+    "name": "Zyra",
     "slug": "ZyraAppFinal",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,11 +12,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      }
+        "backgroundColor": "#1C8B94"
+      },
+      "package": "com.zyra.app",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
@@ -30,13 +30,18 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#111111"
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "_NOTA": "El package y el projectId de EAS deben configurarse con tu propia cuenta de Expo al correr 'npx eas-cli build'.",
+      "router": {},
+      "eas": {}
     }
   }
 }

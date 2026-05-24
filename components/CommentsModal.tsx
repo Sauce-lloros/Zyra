@@ -4,15 +4,16 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authService } from '../services/AuthService';
 import { postService } from '../services/PostService';
 import { userService } from '../services/UserService';
@@ -29,6 +30,7 @@ interface CommentsModalProps {
 
 export default function CommentsModal({ visible, postId, onClose }: CommentsModalProps) {
   const currentUser = authService.getCurrentUser();
+  const insets = useSafeAreaInsets();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -37,13 +39,10 @@ export default function CommentsModal({ visible, postId, onClose }: CommentsModa
 
   useEffect(() => {
     if (!visible || !postId) return;
-
     setLoading(true);
     const unsub = postService.subscribeToComments(postId, list => {
       setComments(list);
       setLoading(false);
-
-      const newAuthors: { [uid: string]: User | null } = {};
       list.forEach(c => {
         if (!authors[c.authorId]) {
           userService.getById(c.authorId).then(user => {
@@ -52,7 +51,6 @@ export default function CommentsModal({ visible, postId, onClose }: CommentsModa
         }
       });
     });
-
     return unsub;
   }, [visible, postId]);
 
@@ -77,7 +75,6 @@ export default function CommentsModal({ visible, postId, onClose }: CommentsModa
       destructive: true,
     });
     if (!ok) return;
-
     try {
       await postService.deleteComment(postId, commentId);
     } catch (e: any) {
@@ -86,94 +83,102 @@ export default function CommentsModal({ visible, postId, onClose }: CommentsModa
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalContent}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Comentarios</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="#aaa" />
-            </TouchableOpacity>
-          </View>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.modalContent}>
 
-          {/* Lista de comentarios */}
-          {loading ? (
-            <View style={styles.centered}>
-              <ActivityIndicator color="#208c8c" />
+            <View style={styles.header}>
+              <Text style={styles.title}>Comentarios</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="close" size={24} color="#aaa" />
+              </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              data={comments}
-              keyExtractor={c => c.id}
-              contentContainerStyle={comments.length === 0 && styles.emptyContainer}
-              ListEmptyComponent={
-                <View style={styles.empty}>
-                  <Ionicons name="chatbubble-outline" size={40} color="#333" />
-                  <Text style={styles.emptyText}>Aún no hay comentarios</Text>
-                  <Text style={styles.emptySub}>¡Sé el primero en comentar!</Text>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const author = authors[item.authorId];
-                const isOwner = item.authorId === currentUser?.uid;
-                return (
-                  <View style={styles.commentRow}>
-                    <Avatar
-                      photoURL={author?.photoURL}
-                      fallback={author?.username || item.authorEmail}
-                      size={34}
-                    />
-                    <View style={styles.commentBody}>
-                      <View style={styles.commentHeader}>
-                        <Text style={styles.commentUser}>
-                          @{author?.username || item.authorEmail}
-                        </Text>
-                        <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
-                        {isOwner && (
-                          <TouchableOpacity
-                            onPress={() => handleDelete(item.id)}
-                            style={styles.deleteBtn}
-                          >
-                            <Ionicons name="trash-outline" size={14} color="#ff6b6b" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                      <Text style={styles.commentText}>{item.content}</Text>
-                    </View>
-                  </View>
-                );
-              }}
-            />
-          )}
 
-          {/* Caja para escribir */}
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={text}
-              onChangeText={setText}
-              placeholder="Escribe un comentario..."
-              placeholderTextColor="#555"
-              multiline
-              maxLength={300}
-            />
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={!text.trim() || sending}
-              style={[styles.sendBtn, (!text.trim() || sending) && { opacity: 0.4 }]}
-            >
-              {sending
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Ionicons name="send" size={18} color="#fff" />
-              }
-            </TouchableOpacity>
+            {loading ? (
+              <View style={styles.centered}>
+                <ActivityIndicator color="#208c8c" />
+              </View>
+            ) : (
+              <FlatList
+                data={comments}
+                keyExtractor={c => c.id}
+                contentContainerStyle={comments.length === 0 && styles.emptyContainer}
+                ListEmptyComponent={
+                  <View style={styles.empty}>
+                    <Ionicons name="chatbubble-outline" size={40} color="#333" />
+                    <Text style={styles.emptyText}>Aún no hay comentarios</Text>
+                    <Text style={styles.emptySub}>¡Sé el primero en comentar!</Text>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const author = authors[item.authorId];
+                  const isOwner = item.authorId === currentUser?.uid;
+                  return (
+                    <View style={styles.commentRow}>
+                      <Avatar
+                        photoURL={author?.photoURL}
+                        fallback={author?.username || item.authorEmail}
+                        size={34}
+                      />
+                      <View style={styles.commentBody}>
+                        <View style={styles.commentHeader}>
+                          <Text style={styles.commentUser}>
+                            @{author?.username || item.authorEmail}
+                          </Text>
+                          <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
+                          {isOwner && (
+                            <TouchableOpacity
+                              onPress={() => handleDelete(item.id)}
+                              style={styles.deleteBtn}
+                            >
+                              <Ionicons name="trash-outline" size={14} color="#ff6b6b" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        <Text style={styles.commentText}>{item.content}</Text>
+                      </View>
+                    </View>
+                  );
+                }}
+              />
+            )}
+
+            <View style={[styles.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <TextInput
+                style={styles.input}
+                value={text}
+                onChangeText={setText}
+                placeholder="Escribe un comentario..."
+                placeholderTextColor="#555"
+                multiline
+                maxLength={300}
+              />
+              <TouchableOpacity
+                onPress={handleSend}
+                disabled={!text.trim() || sending}
+                style={[styles.sendBtn, (!text.trim() || sending) && { opacity: 0.4 }]}
+              >
+                {sending
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Ionicons name="send" size={18} color="#fff" />
+                }
+              </TouchableOpacity>
+            </View>
+
           </View>
-        </KeyboardAvoidingView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -220,7 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: '#222',

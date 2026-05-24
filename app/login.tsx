@@ -5,7 +5,6 @@ import {
   Animated,
   Dimensions,
   Image,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { authService } from '../services/AuthService';
 import { sanitizePassword, validateLoginIdentifier, validatePassword } from '../validators/authValidators';
 
@@ -39,13 +39,10 @@ export default function Login() {
 
   const handleLogin = async () => {
     setError('');
-
     const idCheck = validateLoginIdentifier(identifier);
     if (!idCheck.valid) { setError(idCheck.error!); shake(); return; }
-
     const passCheck = validatePassword(password);
     if (!passCheck.valid) { setError(passCheck.error!); shake(); return; }
-
     setLoading(true);
     try {
       await authService.login({ identifier, password });
@@ -77,7 +74,6 @@ export default function Login() {
       )}
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
         <View style={styles.imageSection}>
           <Image
             source={require('../assets/images/welcome-image.png')}
@@ -129,11 +125,7 @@ export default function Login() {
                 secureTextEntry={!showPass}
               />
               <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                <Ionicons
-                  name={showPass ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#888"
-                />
+                <Ionicons name={showPass ? 'eye-outline' : 'eye-off-outline'} size={20} color="#888" />
               </TouchableOpacity>
             </View>
           </View>
@@ -144,9 +136,7 @@ export default function Login() {
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryBtnText}>
-              {loading ? 'Ingresando...' : 'Ingresar'}
-            </Text>
+            <Text style={styles.primaryBtnText}>{loading ? 'Ingresando...' : 'Ingresar'}</Text>
           </TouchableOpacity>
 
           <View style={styles.linkRow}>
@@ -172,10 +162,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroImage: { width: '85%', height: '100%' },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17,17,17,0.10)',
-  },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,17,17,0.10)' },
   formSection: {
     flex: 1,
     backgroundColor: '#111',

@@ -1,0 +1,21 @@
+{
+  "_NOTA": "Antes de compilar corre 'npx eas-cli build --platform android --profile preview' con tu propia cuenta de Expo (eas login). EAS vinculara el proyecto a tu cuenta y generara el projectId automaticamente. Configura las variables de entorno EXPO_PUBLIC_ en el panel de EAS (Environment Variables) para que el APK tenga acceso a Firebase y Cloudinary.",
+  "cli": {
+    "version": ">= 16.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "node": "20.18.0"
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

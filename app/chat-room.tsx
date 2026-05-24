@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import Avatar from '../components/Avatar';
 import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
@@ -74,10 +74,7 @@ export default function ChatRoom() {
   if (checking) return null;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <View style={[styles.header, { paddingHorizontal: headerPadding as any, paddingTop: topPad }]}>
         <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
           <Ionicons name="chevron-back" size={26} color="#208c8c" />
@@ -89,44 +86,50 @@ export default function ChatRoom() {
         <View style={{ width: 32 }} />
       </View>
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color="#208c8c" size="large" />
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={item => item.id}
-          contentContainerStyle={[
-            styles.messagesList,
-            messages.length === 0 && { flexGrow: 1, justifyContent: 'center' },
-          ]}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Ionicons name="chatbubble-ellipses-outline" size={48} color="#333" />
-              <Text style={styles.emptyText}>No hay mensajes aún</Text>
-              <Text style={styles.emptySub}>Envía el primer mensaje</Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <MessageBubble
-              message={item}
-              isMine={item.senderId === currentUser?.uid}
-              chatId={chatId || ''}
-            />
-          )}
-        />
-      )}
-
-      <MessageInput chatId={chatId || ''} />
-    </KeyboardAvoidingView>
+      {/* KeyboardAvoidingView de react-native-keyboard-controller — funciona en Android */}
+      <KeyboardAvoidingView
+        style={styles.keyboardArea}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color="#208c8c" size="large" />
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={item => item.id}
+            contentContainerStyle={[
+              styles.messagesList,
+              messages.length === 0 && { flexGrow: 1, justifyContent: 'center' },
+            ]}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            ListEmptyComponent={
+              <View style={styles.empty}>
+                <Ionicons name="chatbubble-ellipses-outline" size={48} color="#333" />
+                <Text style={styles.emptyText}>No hay mensajes aún</Text>
+                <Text style={styles.emptySub}>Envía el primer mensaje</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <MessageBubble
+                message={item}
+                isMine={item.senderId === currentUser?.uid}
+                chatId={chatId || ''}
+              />
+            )}
+          />
+        )}
+        <MessageInput chatId={chatId || ''} />
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111' },
+  keyboardArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

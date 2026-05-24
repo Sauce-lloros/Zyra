@@ -72,7 +72,7 @@ export default function Home() {
         setPosts(newPosts);
         setLoading(false);
         setRefreshing(false);
-      }, order);
+      }, 'desc');
     } else {
       if (!followingLoaded) {
         setLoading(true);
@@ -127,6 +127,7 @@ export default function Home() {
   const headerPadding = isWeb ? '8%' : 16;
   const topPad = isWeb ? 14 : 52;
   const noFollowingYet = activeTab === 'siguiendo' && followingLoaded && followingIds.length === 0;
+  const showOrderBtn = activeTab === 'siguiendo' && !noFollowingYet;
 
   if (checking) return null;
 
@@ -157,7 +158,7 @@ export default function Home() {
         <Animated.View style={[styles.tabIndicator, { left: indicatorLeft }]} />
       </View>
 
-      {!noFollowingYet && (
+      {showOrderBtn && (
         <View style={[styles.orderBar, { paddingHorizontal: headerPadding as any }]}>
           <TouchableOpacity style={styles.orderIconBtn} onPress={() => setOrderModal(true)} activeOpacity={0.7}>
             <Ionicons name="swap-vertical" size={18} color="#208c8c" />

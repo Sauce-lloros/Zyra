@@ -5,7 +5,6 @@ import {
   Animated,
   Dimensions,
   Image,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { authService } from '../services/AuthService';
 import { setRegistering } from '../utils/registrationFlag';
 import {
@@ -48,16 +48,12 @@ export default function Register() {
 
   const handleRegister = async () => {
     setError('');
-
     const userCheck = validateUsername(username);
     if (!userCheck.valid) { setError(userCheck.error!); shake(); return; }
-
     const emailCheck = validateEmail(email);
     if (!emailCheck.valid) { setError(emailCheck.error!); shake(); return; }
-
     const passCheck = validatePassword(password);
     if (!passCheck.valid) { setError(passCheck.error!); shake(); return; }
-
     setLoading(true);
     try {
       setRegistering(true);
@@ -85,17 +81,11 @@ export default function Register() {
             <Ionicons name="checkmark-circle" size={80} color="#208c8c" />
           </View>
           <Text style={styles.successTitle}>¡Cuenta creada!</Text>
-          <Text style={styles.successSub}>
-            Bienvenido a Zyra, @{username}
-          </Text>
+          <Text style={styles.successSub}>Bienvenido a Zyra, @{username}</Text>
           <Text style={styles.successDesc}>
             Tu cuenta ha sido creada exitosamente. Ahora puedes iniciar sesión.
           </Text>
-          <TouchableOpacity
-            style={styles.successBtn}
-            onPress={handleGoToLogin}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.successBtn} onPress={handleGoToLogin} activeOpacity={0.85}>
             <Text style={styles.successBtnText}>Iniciar sesión</Text>
           </TouchableOpacity>
         </View>
@@ -122,7 +112,6 @@ export default function Register() {
       )}
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-
         <View style={styles.imageSection}>
           <Image
             source={require('../assets/images/welcome-image.png')}
@@ -186,11 +175,7 @@ export default function Register() {
                 secureTextEntry={!showPass}
               />
               <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                <Ionicons
-                  name={showPass ? 'eye-outline' : 'eye-off-outline'}
-                  size={20}
-                  color="#888"
-                />
+                <Ionicons name={showPass ? 'eye-outline' : 'eye-off-outline'} size={20} color="#888" />
               </TouchableOpacity>
             </View>
           </View>
@@ -201,9 +186,7 @@ export default function Register() {
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryBtnText}>
-              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
-            </Text>
+            <Text style={styles.primaryBtnText}>{loading ? 'Creando cuenta...' : 'Crear cuenta'}</Text>
           </TouchableOpacity>
 
           <View style={styles.linkRow}>
@@ -229,10 +212,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroImage: { width: '80%', height: '100%' },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17,17,17,0.10)',
-  },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,17,17,0.10)' },
   formSection: {
     flex: 1,
     backgroundColor: '#111',
@@ -315,26 +295,9 @@ const styles = StyleSheet.create({
     borderColor: '#222',
   },
   successIcon: { marginBottom: 20 },
-  successTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#fff',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  successSub: {
-    fontSize: 16,
-    color: '#208c8c',
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  successDesc: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 28,
-  },
+  successTitle: { fontSize: 28, fontWeight: '900', color: '#fff', marginBottom: 8, letterSpacing: 1 },
+  successSub: { fontSize: 16, color: '#208c8c', fontWeight: '700', marginBottom: 12 },
+  successDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 20, marginBottom: 28 },
   successBtn: {
     backgroundColor: '#208c8c',
     borderRadius: 12,
